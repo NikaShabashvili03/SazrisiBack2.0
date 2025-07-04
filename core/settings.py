@@ -49,7 +49,8 @@ CORS_ALLOWED_ORIGINS = [
     'https://caligraphe-api.onrender.com',
     'https://caligraphy-front.vercel.app',
     'https://cdesign.ge:8000',
-    "https://admin.cdesign.ge"
+    "https://admin.cdesign.ge",
+    "https://sazrisiback2-0.onrender.com"
 ]
 
 ALLOWED_HOSTS = [
@@ -58,7 +59,8 @@ ALLOWED_HOSTS = [
     'caligraphe-api.onrender.com',
     'https://caligraphy-front.vercel.app',
     'cdesign.ge',
-    "admin.cdesign.ge"
+    "admin.cdesign.ge",
+    "sazrisiback2-0.onrender.com"
 ]
 
 
