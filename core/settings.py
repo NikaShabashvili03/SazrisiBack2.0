@@ -34,14 +34,7 @@ CORS_ALLOW_HEADERS = list(default_headers) + [
     'Content-Type',  
 ]
 
-CORS_ALLOW_METHODS = [
-    'GET',
-    'POST',
-    'PUT',
-    'PATCH',
-    'DELETE',
-    'OPTIONS'
-]
+CORS_ALLOW_METHODS = ['*'] 
 
 CORS_ALLOWED_ORIGINS = [
     'http://localhost:5173',
@@ -63,6 +56,20 @@ ALLOWED_HOSTS = [
     "sazrisiback2-0.onrender.com",
 ]
 
+CSRF_TRUSTED_ORIGINS = [
+    'http://localhost:8000',
+    'https://b2b-backend-1.onrender.com',
+    'https://b2b-backend-3.onrender.com',
+    'https://tourbackend-fl03.onrender.com',
+    "https://sazrisiback2-0.onrender.com"
+]
+
+SESSION_COOKIE_SECURE = False
+SESSION_COOKIE_SAMESITE = None
+SESSION_ENGINE = 'django.contrib.sessions.backends.db'  
+SESSION_COOKIE_AGE = 60 * 60 * 24 * 7  
+SESSION_SAVE_EVERY_REQUEST = True
+
 
 # Application definition
 
@@ -74,29 +81,31 @@ INSTALLED_APPS = [
     'django.contrib.messages',
     'django.contrib.staticfiles',
     'rest_framework',
-    'corsheaders',  # for CORS if needed
-    'quiz',  # your quiz app
+    'corsheaders',
+    'quiz',
     'authentication',
     'ckeditor',
     'ckeditor_uploader',
 ]
 
+STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
+
 MIDDLEWARE = [
     'corsheaders.middleware.CorsMiddleware',
     'django.middleware.security.SecurityMiddleware',
-    'django.middleware.locale.LocaleMiddleware',
-    'whitenoise.middleware.WhiteNoiseMiddleware',
+    'whitenoise.middleware.WhiteNoiseMiddleware', 
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
-    # 'django.middleware.csrf.CsrfViewMiddleware',
+    'django.middleware.locale.LocaleMiddleware',
+    'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
 
+
 AUTHENTICATION_BACKENDS = [
     'django.contrib.auth.backends.ModelBackend',
-    # 'allauth.account.auth_backends.AuthenticationBackend',
 ]
 
 REST_FRAMEWORK = {
@@ -112,12 +121,12 @@ ROOT_URLCONF = 'core.urls'
 TEMPLATES = [
     {
         'BACKEND': 'django.template.backends.django.DjangoTemplates',
-        'DIRS': [BASE_DIR / 'templates'],  # This must include your templates folder
+        'DIRS': [],
         'APP_DIRS': True,
         'OPTIONS': {
             'context_processors': [
                 'django.template.context_processors.debug',
-                'django.template.context_processors.request',  # needed for admin
+                'django.template.context_processors.request',
                 'django.contrib.auth.context_processors.auth',
                 'django.contrib.messages.context_processors.messages',
             ],
