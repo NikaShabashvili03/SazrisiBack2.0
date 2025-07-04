@@ -60,7 +60,7 @@ ALLOWED_HOSTS = [
     'https://caligraphy-front.vercel.app',
     'cdesign.ge',
     "admin.cdesign.ge",
-    "sazrisiback2-0.onrender.com"
+    "sazrisiback2-0.onrender.com",
 ]
 
 
@@ -96,7 +96,7 @@ MIDDLEWARE = [
 
 AUTHENTICATION_BACKENDS = [
     'django.contrib.auth.backends.ModelBackend',
-    'allauth.account.auth_backends.AuthenticationBackend',
+    # 'allauth.account.auth_backends.AuthenticationBackend',
 ]
 
 REST_FRAMEWORK = {
