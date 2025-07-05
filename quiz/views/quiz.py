@@ -17,6 +17,7 @@ class QuizListView(APIView):
         category = get_object_or_404(Category, id=categoryId)
 
         if not category.has_access(user=request.user):
+            print("Not Access")
             return Response(
                     {'error': 'You do not have access to this category'}, 
                     status=status.HTTP_403_FORBIDDEN

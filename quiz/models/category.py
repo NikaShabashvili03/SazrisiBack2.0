@@ -17,6 +17,9 @@ class Category(models.Model):
         ordering = ['title']
 
     def has_access(self, user):
+        if not self.is_paid:
+            return True 
+        
         if not user:
             return False
 
