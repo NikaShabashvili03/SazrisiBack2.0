@@ -234,7 +234,8 @@ class Question(models.Model):
 
 class Answer(models.Model):
     question = models.ForeignKey(Question, on_delete=models.CASCADE, related_name='answers')
-    answer_text = models.TextField()
+    answer_text = RichTextUploadingField('Answer Text', config_name='answer_editor')
+    
     is_correct = models.BooleanField(default=False)
     order = models.IntegerField(default=0)
     

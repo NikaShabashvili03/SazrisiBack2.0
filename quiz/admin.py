@@ -56,12 +56,32 @@ class QuestionAdmin(admin.ModelAdmin):
         ]
     inlines = [AnswerInline]
 
+
+class AnswerAdminForm(forms.ModelForm):
+    answer_text = forms.CharField(widget=CKEditorUploadingWidget(config_name='default'))
+    
+    class Meta:
+        model = Answer
+        fields = '__all__'
+
 @admin.register(Answer)
 class AnswerAdmin(admin.ModelAdmin):
+    form = AnswerAdminForm
+
     list_display = ['question', 'answer_text', 'is_correct', 'order']
     list_filter = ['is_correct', 'question__quiz__category']
     search_fields = ['answer_text', 'question__question_text']
 
+    class Media:
+        css = {
+            'all': [
+                'https://unpkg.com/mathlive/dist/mathlive.core.css',
+                'https://unpkg.com/mathlive/dist/mathlive.css',
+            ]
+        }
+        js = [
+            'https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js',
+        ]
 
 @admin.register(QuizAttempt)
 class QuizAttemptAdmin(admin.ModelAdmin):
