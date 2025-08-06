@@ -39,29 +39,15 @@ CORS_ALLOW_METHODS = ['*']
 CORS_ALLOWED_ORIGINS = [
     'http://localhost:5173',
     'http://127.0.0.1:5173',
-    'https://caligraphe-api.onrender.com',
-    'https://caligraphy-front.vercel.app',
-    'https://cdesign.ge:8000',
-    "https://admin.cdesign.ge",
-    "https://sazrisiback2-0.onrender.com"
 ]
 
 ALLOWED_HOSTS = [
     '127.0.0.1', 
     'localhost',
-    'caligraphe-api.onrender.com',
-    'https://caligraphy-front.vercel.app',
-    'cdesign.ge',
-    "admin.cdesign.ge",
-    "sazrisiback2-0.onrender.com",
 ]
 
 CSRF_TRUSTED_ORIGINS = [
     'http://localhost:8000',
-    'https://b2b-backend-1.onrender.com',
-    'https://b2b-backend-3.onrender.com',
-    'https://tourbackend-fl03.onrender.com',
-    "https://sazrisiback2-0.onrender.com"
 ]
 
 SESSION_COOKIE_SECURE = False
@@ -143,20 +129,16 @@ WSGI_APPLICATION = 'core.wsgi.application'
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.mysql',
-        'NAME': 'defaultdb',
-        'USER': 'avnadmin',
-        'PASSWORD': 'AVNS_3b_12K-Sv4dndfIckcU',
-        'HOST': 'sazrisi-sql-sazrisi.c.aivencloud.com',
-        'PORT': '18327',
+        'NAME': os.getenv('DB_NAME', 'sazrisi_db'),
+        'USER': os.getenv('DB_USER', 'root'),
+        'PASSWORD': os.getenv('DB_PASSWORD', 'root'),
+        'HOST': os.getenv('DB_HOST', 'localhost'),
+        'PORT': os.getenv('DB_PORT', '3306'),
         'OPTIONS': {
             'init_command': "SET sql_mode='STRICT_TRANS_TABLES'",
-            'ssl': {
-                'ca': os.path.join(BASE_DIR, 'ca.pem'),
-            }
         }
     }
 }
-
 
 
 # Password validation
