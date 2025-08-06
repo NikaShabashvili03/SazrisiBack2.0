@@ -41,7 +41,7 @@ class UserRegisterView(generics.GenericAPIView):
             'session_token',
             session.session_token,
             expires=expires_at,
-            httponly=False,
+            httponly=True,
             secure=False, 
             samesite='None' 
         )
@@ -83,7 +83,7 @@ class UserLoginView(generics.GenericAPIView):
             'session_token',
             session.session_token,
             expires=expires_at,
-            httponly=False,
+            httponly=True,
             secure=False, 
             samesite='None' 
         )
@@ -106,7 +106,7 @@ class UserLogoutView(generics.GenericAPIView):
                 expires='Thu, 01 Jan 1970 00:00:00 GMT',
                 max_age=0,
                 path='/',
-                httponly=False,
+                httponly=True,
                 secure=False,  
                 samesite='None'
             )
