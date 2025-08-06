@@ -39,15 +39,20 @@ CORS_ALLOW_METHODS = ['*']
 CORS_ALLOWED_ORIGINS = [
     'http://localhost:5173',
     'http://127.0.0.1:5173',
+    'http://159.203.102.83:8000',
+    'http://159.203.102.83:5173'
 ]
 
 ALLOWED_HOSTS = [
     '127.0.0.1', 
     'localhost',
+    '159.203.102.83',
 ]
 
 CSRF_TRUSTED_ORIGINS = [
     'http://localhost:8000',
+    'http://159.203.102.83:8000',
+    'http://159.203.102.83:5173'
 ]
 
 SESSION_COOKIE_SECURE = False
