@@ -36,12 +36,11 @@ class UserRegisterView(generics.GenericAPIView):
         user_data = UserProfileSerializer(new_user).data
 
         response = Response(user_data, status=status.HTTP_201_CREATED)
-        
         response.set_cookie(
             'session_token',
             session.session_token,
             expires=expires_at,
-            httponly=True,
+            httponly=False,
             secure=False, 
             samesite='None' 
         )
@@ -78,12 +77,11 @@ class UserLoginView(generics.GenericAPIView):
         user_data = UserProfileSerializer(user).data
         
         response = Response(user_data, status=status.HTTP_201_CREATED)
-        
         response.set_cookie(
             'session_token',
             session.session_token,
             expires=expires_at,
-            httponly=True,
+            httponly=False,
             secure=False, 
             samesite='None' 
         )
@@ -106,7 +104,7 @@ class UserLogoutView(generics.GenericAPIView):
                 expires='Thu, 01 Jan 1970 00:00:00 GMT',
                 max_age=0,
                 path='/',
-                httponly=True,
+                httponly=False,
                 secure=False,  
                 samesite='None'
             )
