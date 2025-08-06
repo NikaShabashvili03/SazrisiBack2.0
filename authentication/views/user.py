@@ -35,7 +35,12 @@ class UserRegisterView(generics.GenericAPIView):
 
         user_data = UserProfileSerializer(new_user).data
 
-        response = Response(user_data, status=status.HTTP_201_CREATED)
+        response = Response({
+            "user": user_data,
+            "session_token": session.session_token
+        }, status=status.HTTP_201_CREATED)
+        # response = Response(user_data, status=status.HTTP_201_CREATED)
+        
         response.set_cookie(
             'session_token',
             session.session_token,
@@ -76,14 +81,19 @@ class UserLoginView(generics.GenericAPIView):
         
         user_data = UserProfileSerializer(user).data
         
-        response = Response(user_data, status=status.HTTP_201_CREATED)
+        response = Response({
+            "user": user_data,
+            "session_token": session.session_token
+        }, status=status.HTTP_201_CREATED)
+        # response = Response(user_data, status=status.HTTP_201_CREATED)
+        
         response.set_cookie(
             'session_token',
             session.session_token,
             expires=expires_at,
             httponly=False,
-            secure=False,  # Must be True for HTTPS
-            samesite='None'  # 'None' required for cross-site cookies with credentials
+            secure=False, 
+            samesite='None' 
         )
         csrf_token = get_token(request)
         response['X-CSRFToken'] = csrf_token
