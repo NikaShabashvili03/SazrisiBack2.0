@@ -40,8 +40,8 @@ class UserRegisterView(generics.GenericAPIView):
             'session_token',
             session.session_token,
             expires=expires_at,
-            httponly=True,
-            secure=True, 
+            httponly=False,
+            secure=False, 
             samesite='None' 
         )
         csrf_token = get_token(request)
@@ -81,8 +81,8 @@ class UserLoginView(generics.GenericAPIView):
             'session_token',
             session.session_token,
             expires=expires_at,
-            httponly=True,
-            secure=True,  # Must be True for HTTPS
+            httponly=False,
+            secure=False,  # Must be True for HTTPS
             samesite='None'  # 'None' required for cross-site cookies with credentials
         )
         csrf_token = get_token(request)
@@ -104,8 +104,8 @@ class UserLogoutView(generics.GenericAPIView):
                 expires='Thu, 01 Jan 1970 00:00:00 GMT',
                 max_age=0,
                 path='/',
-                httponly=True,
-                secure=True,  
+                httponly=False,
+                secure=False,  
                 samesite='None'
             )
         else:
