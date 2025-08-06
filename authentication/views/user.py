@@ -1,6 +1,6 @@
 from rest_framework import generics, status
 from rest_framework.response import Response
-from ..serializers.user import UserLoginSerializer, UserProfileSerializer, UserRegisterSerializer, UserChangePasswordSerializer
+from ..serializers.user import UserLoginSerializer, UserProfileSerializer, UserRegisterSerializer, UserChangePasswordSerializer, AvatarUploadSerializer, AvatarSerializer, PreferencesCreateSerializer, PreferencesSerializer
 from ..models import UserSession, User
 from django.middleware.csrf import get_token
 import uuid
@@ -11,7 +11,36 @@ from django.utils.timezone import now
 from ..utils import get_client_ip
 from rest_framework.views import APIView
 
+class AvatarView(generics.GenericAPIView):
+    permission_classes = [IsAuthenticated]
+    serializer_class = AvatarUploadSerializer
 
+    def post(self, request):
+        serializer = self.get_serializer(data=request.data, context={'request': request})
+        if serializer.is_valid():
+            avatar = serializer.save()
+
+            avatar_data = AvatarSerializer(avatar).data
+
+            return Response(avatar_data, status=status.HTTP_200_OK)
+
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+class PreferencesView(generics.GenericAPIView):
+    permission_classes = [IsAuthenticated]
+    serializer_class = PreferencesCreateSerializer
+
+    def post(self, request):
+        serializer = self.get_serializer(data=request.data, context={'request': request})
+        if serializer.is_valid():
+            preferences = serializer.save()
+
+            preferences_data = PreferencesSerializer(preferences).data
+
+            return Response(preferences_data, status=status.HTTP_200_OK)
+
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+    
 class UserRegisterView(generics.GenericAPIView):
     serializer_class = UserRegisterSerializer
     permission_classes = [AllowAny]

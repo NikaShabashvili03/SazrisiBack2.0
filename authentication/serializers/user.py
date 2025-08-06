@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from ..models import User
+from ..models import User, Avatar, Preferences
 from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError
 from django.contrib.auth.hashers import check_password
@@ -67,8 +67,53 @@ class UserLoginSerializer(serializers.Serializer):
                 raise serializers.ValidationError("Invalid credentials")
         except User.DoesNotExist:
             raise serializers.ValidationError("User does not exist")
-        
+
+class AvatarUploadSerializer(serializers.ModelSerializer):
+    image = serializers.ImageField(write_only=True, required=True)
+
+    class Meta:
+        model = Avatar
+        fields = ['image']
+
+    def create(self, validated_data):
+        user = self.context['request'].user
+        image = validated_data.get('image')
+
+        avatar, created = Avatar.objects.get_or_create(user=user)
+        avatar.url = image
+        avatar.save()
+        return avatar
+
+class PreferencesCreateSerializer(serializers.ModelSerializer):
+    theme_color = serializers.CharField(write_only=True, required=True)
+
+    class Meta:
+        model = Preferences
+        fields = ['theme_color']
+
+    def create(self, validated_data):
+        user = self.context['request'].user
+        theme_color = validated_data.get('theme_color')
+
+        preferences, created = Preferences.objects.get_or_create(user=user)
+        preferences.theme_color = theme_color
+        preferences.save()
+        return preferences
+
+class PreferencesSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Preferences
+        fields = ['theme_color']
+
+class AvatarSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Avatar
+        fields = ['url']
+
 class UserProfileSerializer(serializers.ModelSerializer):
+    avatar = AvatarSerializer()
+    preferences = PreferencesSerializer()
+
     class Meta:
         model = User 
-        fields = ['id', 'firstname', 'lastname', 'email', 'email_verified']
+        fields = ['id', 'firstname', 'avatar', 'preferences', 'lastname', 'email', 'email_verified']
