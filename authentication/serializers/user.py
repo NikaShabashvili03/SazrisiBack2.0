@@ -32,13 +32,20 @@ class UserRegisterSerializer(serializers.Serializer):
     password = serializers.CharField(write_only=True)
     firstname = serializers.CharField(write_only=True)
     lastname = serializers.CharField(write_only=True)
+    rePassword = serializers.CharField(write_only=True)
 
     def validate_email(self, email):
         if User.objects.filter(email=email).exists():
             raise serializers.ValidationError("A user with this email already exists.")
         return email
+    
+    def validate(self, attrs):
+        if attrs['password'] != attrs['rePassword']:
+            raise serializers.ValidationError({"rePassword": "Passwords do not match."})
+        return attrs
 
     def create(self, validated_data):
+        validated_data.pop('rePassword')
         user = User.objects.create(
             email=validated_data['email'],
             password=validated_data['password'],
