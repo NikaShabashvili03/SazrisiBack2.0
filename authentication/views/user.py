@@ -42,7 +42,7 @@ class UserRegisterView(generics.GenericAPIView):
             expires=expires_at,
             httponly=False,
             secure=False, 
-            samesite='None' 
+            samesite='Lax' 
         )
         csrf_token = get_token(request)
         response['X-CSRFToken'] = csrf_token
@@ -83,7 +83,7 @@ class UserLoginView(generics.GenericAPIView):
             expires=expires_at,
             httponly=False,
             secure=False, 
-            samesite='None' 
+            samesite='Lax' 
         )
         csrf_token = get_token(request)
         response['X-CSRFToken'] = csrf_token
@@ -106,7 +106,7 @@ class UserLogoutView(generics.GenericAPIView):
                 path='/',
                 httponly=False,
                 secure=False,  
-                samesite='None'
+                samesite='Lax'
             )
         else:
             response = Response({'details': 'Invalid session token'}, status=status.HTTP_400_BAD_REQUEST)
