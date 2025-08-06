@@ -1,0 +1,527 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sazrisi API Documentation</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+    body {
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        line-height: 1.6;
+        color: #333;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        min-height: 100vh;
+    }
+
+    .container {
+        max-width: 1200px;
+        margin: 0 auto;
+        padding: 20px;
+        background: rgba(255, 255, 255, 0.95);
+        backdrop-filter: blur(10px);
+        border-radius: 20px;
+        box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+        margin-top: 20px;
+        margin-bottom: 20px;
+    }
+
+    h1 {
+        color: #2d3748;
+        font-size: 2.5rem;
+        text-align: center;
+        margin-bottom: 2rem;
+        background: linear-gradient(135deg, #667eea, #764ba2);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        background-clip: text;
+    }
+
+    h2 {
+        color: #4a5568;
+        font-size: 1.8rem;
+        margin: 2rem 0 1rem;
+        padding-bottom: 0.5rem;
+        border-bottom: 2px solid #e2e8f0;
+    }
+
+    h3 {
+        color: #2d3748;
+        font-size: 1.3rem;
+        margin: 1.5rem 0 0.5rem;
+    }
+
+    .base-url {
+        background: linear-gradient(135deg, #4299e1, #3182ce);
+        color: white;
+        padding: 15px 20px;
+        border-radius: 10px;
+        font-family: 'Courier New', monospace;
+        text-align: center;
+        margin: 1rem 0;
+        font-size: 1.1rem;
+    }
+
+    .endpoint {
+        background: #f7fafc;
+        border: 1px solid #e2e8f0;
+        border-radius: 12px;
+        padding: 20px;
+        margin: 1rem 0;
+        transition: all 0.3s ease;
+        border-left: 4px solid #667eea;
+    }
+
+    .endpoint:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
+    }
+
+    .method {
+        display: inline-block;
+        padding: 4px 12px;
+        border-radius: 6px;
+        font-weight: bold;
+        font-size: 0.8rem;
+        margin-right: 10px;
+        color: white;
+    }
+
+    .method.get { background: #48bb78; }
+    .method.post { background: #ed8936; }
+    .method.put { background: #4299e1; }
+    .method.delete { background: #f56565; }
+
+    .url {
+        font-family: 'Courier New', monospace;
+        background: #2d3748;
+        color: #68d391;
+        padding: 8px 12px;
+        border-radius: 6px;
+        display: inline-block;
+        margin: 5px 0;
+    }
+
+    .code-block {
+        background: #1a202c;
+        color: #e2e8f0;
+        padding: 15px;
+        border-radius: 8px;
+        font-family: 'Courier New', monospace;
+        overflow-x: auto;
+        margin: 10px 0;
+        border-left: 4px solid #4299e1;
+    }
+
+    .json-key {
+        color: #63b3ed;
+    }
+
+    .json-string {
+        color: #68d391;
+    }
+
+    .json-number {
+        color: #fbb6ce;
+    }
+
+    .auth-required {
+        background: #fed7d7;
+        color: #c53030;
+        padding: 5px 10px;
+        border-radius: 4px;
+        font-size: 0.8rem;
+        display: inline-block;
+        margin: 5px 0;
+    }
+
+    .flow-section {
+        background: linear-gradient(135deg, #e6fffa, #b2f5ea);
+        border: 1px solid #81e6d9;
+        border-radius: 12px;
+        padding: 20px;
+        margin: 20px 0;
+    }
+
+    .flow-step {
+        background: white;
+        padding: 15px;
+        margin: 10px 0;
+        border-radius: 8px;
+        border-left: 4px solid #38b2ac;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    }
+
+    .error-codes {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+        gap: 15px;
+        margin: 20px 0;
+    }
+
+    .error-card {
+        background: #fed7d7;
+        border: 1px solid #feb2b2;
+        border-radius: 8px;
+        padding: 15px;
+        text-align: center;
+    }
+
+    .error-code {
+        font-weight: bold;
+        color: #c53030;
+        font-size: 1.1rem;
+    }
+
+    .sidebar {
+        position: fixed;
+        top: 20px;
+        right: 20px;
+        background: rgba(255, 255, 255, 0.9);
+        backdrop-filter: blur(10px);
+        border-radius: 10px;
+        padding: 15px;
+        box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
+        max-height: 80vh;
+        overflow-y: auto;
+        width: 200px;
+    }
+
+    .sidebar h4 {
+        margin-bottom: 10px;
+        color: #2d3748;
+    }
+
+    .sidebar a {
+        display: block;
+        color: #4299e1;
+        text-decoration: none;
+        padding: 5px 0;
+        font-size: 0.9rem;
+        transition: color 0.3s;
+    }
+
+    .sidebar a:hover {
+        color: #2b6cb0;
+    }
+
+    @media (max-width: 768px) {
+        .sidebar {
+            display: none;
+        }
+        
+        .container {
+            margin: 10px;
+            padding: 15px;
+        }
+        
+        h1 {
+            font-size: 2rem;
+        }
+    }
+</style>
+</head>
+<body>
+    <div class="sidebar">
+        <h4>Quick Navigation</h4>
+        <a href="#user-management">User Management</a>
+        <a href="#categories">Categories</a>
+        <a href="#quizzes">Quizzes</a>
+        <a href="#quiz-attempts">Quiz Attempts</a>
+        <a href="#auth-flow">Authentication Flow</a>
+        <a href="#quiz-flow">Quiz Flow</a>
+        <a href="#error-responses">Error Responses</a>
+    </div>
+<div class="container">
+    <h1>🧠 Sazrisi API Documentation</h1>
+    
+    <div class="base-url">
+        Base URL: http://159.203.102.83:8000
+    </div>
+
+    <p><strong>Authentication:</strong> The API uses session-based authentication with cookies. After successful login, the session token is stored in cookies and used for subsequent requests.</p>
+
+    <h2 id="user-management">👤 User Management</h2>
+
+    <div class="endpoint">
+        <h3>1. User Login</h3>
+        <div>
+            <span class="method post">POST</span>
+            <code class="url">/api/v1/user/login/</code>
+        </div>
+        <p>Authenticate a user and establish a session.</p>
+        
+        <strong>Request Body:</strong>
+        <div class="code-block">
+{
+<span class="json-key">"email"</span>: <span class="json-string">"user@example.com"</span>,
+<span class="json-key">"password"</span>: <span class="json-string">"password123"</span>
+}
+</div>
+        <strong>Response:</strong>
+        <ul>
+            <li><strong>Success (200):</strong> Returns user data and sets session cookies</li>
+            <li><strong>Error (401):</strong> Invalid credentials</li>
+        </ul>
+    </div>
+
+    <div class="endpoint">
+        <h3>2. User Registration</h3>
+        <div>
+            <span class="method post">POST</span>
+            <code class="url">/api/v1/user/register/</code>
+        </div>
+        <p>Register a new user account.</p>
+        
+        <strong>Request Body:</strong>
+        <div class="code-block">
+{
+<span class="json-key">"email"</span>: <span class="json-string">"user@example.com"</span>,
+<span class="json-key">"password"</span>: <span class="json-string">"password123"</span>,
+<span class="json-key">"firstname"</span>: <span class="json-string">"John"</span>,
+<span class="json-key">"lastname"</span>: <span class="json-string">"Doe"</span>,
+<span class="json-key">"rePassword"</span>: <span class="json-string">"password123"</span>
+}
+</div>
+        <strong>Response:</strong>
+        <ul>
+            <li><strong>Success (201):</strong> User created successfully</li>
+            <li><strong>Error (400):</strong> Validation errors or email already exists</li>
+        </ul>
+    </div>
+
+    <div class="endpoint">
+        <h3>3. User Profile</h3>
+        <div>
+            <span class="method get">GET</span>
+            <code class="url">/api/v1/user/profile/</code>
+            <span class="auth-required">🔒 Authentication Required</span>
+        </div>
+        <p>Get the current authenticated user's profile information.</p>
+        
+        <strong>Response:</strong>
+        <ul>
+            <li><strong>Success (200):</strong> Returns user profile data</li>
+            <li><strong>Error (401):</strong> Not authenticated</li>
+        </ul>
+    </div>
+
+    <h2 id="categories">📚 Categories</h2>
+
+    <div class="endpoint">
+        <h3>1. List Categories</h3>
+        <div>
+            <span class="method get">GET</span>
+            <code class="url">/api/v2/category/list/</code>
+        </div>
+        <p>Retrieve a list of all available quiz categories.</p>
+        
+        <strong>Response Example:</strong>
+        <div class="code-block">
+[
+{
+<span class="json-key">"id"</span>: <span class="json-number">1</span>,
+<span class="json-key">"name"</span>: <span class="json-string">"Category Name"</span>,
+<span class="json-key">"description"</span>: <span class="json-string">"Category description"</span>
+}
+]
+</div>
+</div>
+    <div class="endpoint">
+        <h3>2. Category Details</h3>
+        <div>
+            <span class="method get">GET</span>
+            <code class="url">/api/v2/category/details/{category_id}</code>
+        </div>
+        <p>Get detailed information about a specific category.</p>
+        
+        <strong>Parameters:</strong>
+        <ul>
+            <li><code>category_id</code> (integer): The ID of the category</li>
+        </ul>
+        
+        <strong>Example:</strong>
+        <div class="code-block">GET /api/v2/category/details/1</div>
+        
+        <strong>Response:</strong>
+        <ul>
+            <li><strong>Success (200):</strong> Returns category details</li>
+            <li><strong>Error (404):</strong> Category not found</li>
+        </ul>
+    </div>
+
+    <h2 id="quizzes">🧩 Quizzes</h2>
+
+    <div class="endpoint">
+        <h3>1. Get All Quizzes in Category</h3>
+        <div>
+            <span class="method get">GET</span>
+            <code class="url">/api/v2/quiz/category/{category_id}/quizzes/</code>
+        </div>
+        <p>Retrieve all quizzes within a specific category.</p>
+        
+        <strong>Parameters:</strong>
+        <ul>
+            <li><code>category_id</code> (integer): The ID of the category</li>
+        </ul>
+        
+        <strong>Example:</strong>
+        <div class="code-block">GET /api/v2/quiz/category/1/quizzes/</div>
+    </div>
+
+    <div class="endpoint">
+        <h3>2. Quiz Details</h3>
+        <div>
+            <span class="method get">GET</span>
+            <code class="url">/api/v2/quiz/category/{category_id}/quizzes/{quiz_id}</code>
+        </div>
+        <p>Get detailed information about a specific quiz.</p>
+        
+        <strong>Parameters:</strong>
+        <ul>
+            <li><code>category_id</code> (integer): The ID of the category</li>
+            <li><code>quiz_id</code> (integer): The ID of the quiz</li>
+        </ul>
+        
+        <strong>Example:</strong>
+        <div class="code-block">GET /api/v2/quiz/category/1/quizzes/1</div>
+    </div>
+
+    <div class="endpoint">
+        <h3>3. Start Quiz</h3>
+        <div>
+            <span class="method post">POST</span>
+            <code class="url">/api/v2/quiz/category/{category_id}/quizzes/{quiz_id}/start/</code>
+            <span class="auth-required">🔒 Authentication Required</span>
+        </div>
+        <p>Start a new quiz attempt.</p>
+        
+        <strong>Parameters:</strong>
+        <ul>
+            <li><code>category_id</code> (integer): The ID of the category</li>
+            <li><code>quiz_id</code> (integer): The ID of the quiz</li>
+        </ul>
+        
+        <strong>Response Example:</strong>
+        <div class="code-block">
+{
+<span class="json-key">"attempt_id"</span>: <span class="json-number">2</span>,
+<span class="json-key">"quiz_id"</span>: <span class="json-number">1</span>,
+<span class="json-key">"started_at"</span>: <span class="json-string">"2025-01-05T10:30:00Z"</span>
+}
+</div>
+</div>
+    <h2 id="quiz-attempts">📝 Quiz Attempts</h2>
+
+    <div class="endpoint">
+        <h3>1. Get Attempt Questions</h3>
+        <div>
+            <span class="method get">GET</span>
+            <code class="url">/api/v2/quiz/attempts/{attempt_id}/questions</code>
+            <span class="auth-required">🔒 Authentication Required</span>
+        </div>
+        <p>Retrieve all questions for a specific quiz attempt.</p>
+        
+        <strong>Parameters:</strong>
+        <ul>
+            <li><code>attempt_id</code> (integer): The ID of the quiz attempt</li>
+        </ul>
+        
+        <strong>Example:</strong>
+        <div class="code-block">GET /api/v2/quiz/attempts/2/questions</div>
+    </div>
+
+    <div class="endpoint">
+        <h3>2. Submit Answer</h3>
+        <div>
+            <span class="method post">POST</span>
+            <code class="url">/api/v2/quiz/attempts/{attempt_id}/answer</code>
+            <span class="auth-required">🔒 Authentication Required</span>
+        </div>
+        <p>Submit an answer for a specific question in a quiz attempt.</p>
+        
+        <strong>Request Body:</strong>
+        <div class="code-block">
+{
+<span class="json-key">"question_id"</span>: <span class="json-number">5</span>,
+<span class="json-key">"selected_answer"</span>: <span class="json-string">"b"</span>,
+<span class="json-key">"time_taken"</span>: <span class="json-number">5</span>
+}
+</div>
+        <strong>Fields:</strong>
+        <ul>
+            <li><code>question_id</code> (integer): The ID of the question being answered</li>
+            <li><code>selected_answer</code> (string): The selected answer option (e.g., "a", "b", "c", "d")</li>
+            <li><code>time_taken</code> (integer): Time taken to answer the question in seconds</li>
+        </ul>
+    </div>
+
+    <h2 id="auth-flow">🔐 Authentication Flow</h2>
+    <div class="flow-section">
+        <div class="flow-step">
+            <strong>1. Register</strong> a new account using <code>/api/v1/user/register/</code>
+        </div>
+        <div class="flow-step">
+            <strong>2. Login</strong> using <code>/api/v1/user/login/</code> to get session cookies
+        </div>
+        <div class="flow-step">
+            <strong>3. Include</strong> the session cookies in all subsequent requests
+        </div>
+        <div class="flow-step">
+            <strong>4. Verify</strong> authentication status using <code>/api/v1/user/profile/</code>
+        </div>
+    </div>
+
+    <h2 id="quiz-flow">🎯 Quiz Flow</h2>
+    <div class="flow-section">
+        <div class="flow-step">
+            <strong>1. Get categories</strong> using <code>/api/v2/category/list/</code>
+        </div>
+        <div class="flow-step">
+            <strong>2. Select a category</strong> and get its quizzes using <code>/api/v2/quiz/category/{id}/quizzes/</code>
+        </div>
+        <div class="flow-step">
+            <strong>3. Start a quiz</strong> using <code>/api/v2/quiz/category/{category_id}/quizzes/{quiz_id}/start/</code>
+        </div>
+        <div class="flow-step">
+            <strong>4. Get questions</strong> using <code>/api/v2/quiz/attempts/{attempt_id}/questions</code>
+        </div>
+        <div class="flow-step">
+            <strong>5. Submit answers</strong> one by one using <code>/api/v2/quiz/attempts/{attempt_id}/answer</code>
+        </div>
+    </div>
+
+    <h2 id="error-responses">⚠️ Error Responses</h2>
+    <div class="error-codes">
+        <div class="error-card">
+            <div class="error-code">400 Bad Request</div>
+            <p>Validation error or malformed request</p>
+        </div>
+        <div class="error-card">
+            <div class="error-code">401 Unauthorized</div>
+            <p>Authentication required</p>
+        </div>
+        <div class="error-card">
+            <div class="error-code">404 Not Found</div>
+            <p>Resource not found</p>
+        </div>
+        <div class="error-card">
+            <div class="error-code">500 Server Error</div>
+            <p>Internal server error</p>
+        </div>
+    </div>
+
+    <h2>📝 Notes</h2>
+    <ul>
+        <li>All timestamps are in ISO 8601 format</li>
+        <li>Session cookies are automatically managed by the client</li>
+        <li>CSRF protection is implemented using cookies</li>
+        <li>API versions: User endpoints use <code>v1</code>, Quiz and Category endpoints use <code>v2</code></li>
+    </ul>
+</div>
+</body>
+</html>
