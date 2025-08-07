@@ -10,6 +10,14 @@ from django.db import transaction
 from django.db.models import Count, Avg, Max
 from quiz.serializers.quiz import QuizAttemptSerializer, QuizSerializer, QuestionSerializer, QuestionWithCorrectSerializer, UserAnswer
 
+from django.db.models import Count, Avg, Sum, F, Q, Max, Min, Case, When, IntegerField, FloatField, ExpressionWrapper
+from django.db.models.functions import TruncDate, TruncWeek, TruncMonth, Extract
+from collections import defaultdict
+import math
+from datetime import timedelta, datetime
+from quiz.models.quiz import UserAnswer, Quiz, Question, Topic
+
+
 class QuizListView(APIView):
     permission_classes = [IsAuthenticated]
 
@@ -202,4 +210,146 @@ class QuizAnswerView(APIView):
         return Response({
             "updated_question": question_with_correct_answers,
             "updated_attempt": serialized_attempt,
+        })
+
+class Statistic(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        user = request.user
+
+        def percentage(correct, total):
+            return round((correct / total) * 100, 2) if total > 0 else 0
+
+        # === Category Stats ===
+        category_stats = Quiz.objects.filter(attempts__user=user).values(
+            'category__title'
+        ).annotate(
+            total_answers=Count(
+                'questions__useranswer',
+                filter=Q(questions__useranswer__attempt__user=user)
+            ),
+            total_errors=Count(
+                'questions__useranswer',
+                filter=Q(
+                    questions__useranswer__is_correct=False,
+                    questions__useranswer__attempt__user=user
+                )
+            ),
+            avg_time=Avg(
+                'questions__useranswer__time_taken',
+                filter=Q(questions__useranswer__attempt__user=user)
+            ),
+        ).annotate(
+            error_percentage=ExpressionWrapper(
+                100 * F('total_errors') / F('total_answers'),
+                output_field=FloatField()
+            )
+        ).filter(total_answers__gt=0).order_by('-total_errors')
+
+        categories_chart = {
+            "labels": [c['category__title'] for c in category_stats],
+            "datasets": {
+                "total_errors": [c['total_errors'] for c in category_stats],
+                "error_percentages": [round(c['error_percentage'], 2) for c in category_stats],
+                "average_time_seconds": [round(c['avg_time'] or 0, 2) for c in category_stats],
+            }
+        }
+
+        # === Topic Stats ===
+        topic_stats = Topic.objects.annotate(
+            total_answers=Count(
+                'questions__useranswer',
+                filter=Q(questions__useranswer__attempt__user=user)
+            ),
+            total_errors=Count(
+                'questions__useranswer',
+                filter=Q(
+                    questions__useranswer__is_correct=False,
+                    questions__useranswer__attempt__user=user
+                )
+            ),
+            avg_time=Avg(
+                'questions__useranswer__time_taken',
+                filter=Q(questions__useranswer__attempt__user=user)
+            )
+        ).annotate(
+            error_percentage=ExpressionWrapper(
+                100 * F('total_errors') / F('total_answers'),
+                output_field=FloatField()
+            )
+        ).filter(total_answers__gt=0).order_by('-total_errors')
+
+        topics_chart = {
+            "labels": [t.name for t in topic_stats],
+            "datasets": {
+                "total_errors": [t.total_errors for t in topic_stats],
+                "error_percentages": [round(t.error_percentage, 2) for t in topic_stats],
+                "average_time_seconds": [round(t.avg_time or 0, 2) for t in topic_stats],
+            }
+        }
+
+        # === Answer Distribution (for Pie/Bar chart) ===
+        distribution = {
+            label: UserAnswer.objects.filter(
+                attempt__user=user, selected_answer=label.lower()
+            ).count()
+            for label in ['A', 'B', 'G', 'D']
+        }
+
+        answer_distribution_chart = {
+            "labels": list(distribution.keys()),
+            "datasets": {
+                "counts": list(distribution.values())
+            }
+        }
+
+        # === Topic Accuracy (Correct vs Incorrect)
+        topic_accuracy_stats = Topic.objects.annotate(
+            correct=Count(
+                'questions__useranswer',
+                filter=Q(questions__useranswer__is_correct=True, questions__useranswer__attempt__user=user)
+            ),
+            incorrect=Count(
+                'questions__useranswer',
+                filter=Q(questions__useranswer__is_correct=False, questions__useranswer__attempt__user=user)
+            )
+        ).filter(Q(correct__gt=0) | Q(incorrect__gt=0)).order_by('-incorrect')
+
+        topic_accuracy_chart = {
+            "labels": [],
+            "datasets": {
+                "correct": [],
+                "incorrect": [],
+                "accuracy_percentage": []
+            }
+        }
+
+        for t in topic_accuracy_stats:
+            total = t.correct + t.incorrect
+            topic_accuracy_chart["labels"].append(t.name)
+            topic_accuracy_chart["datasets"]["correct"].append(t.correct)
+            topic_accuracy_chart["datasets"]["incorrect"].append(t.incorrect)
+            topic_accuracy_chart["datasets"]["accuracy_percentage"].append(percentage(t.correct, total))
+
+        # === Overall Stats ===
+        total_answers = UserAnswer.objects.filter(attempt__user=user).count()
+        total_errors = UserAnswer.objects.filter(attempt__user=user, is_correct=False).count()
+        average_time = UserAnswer.objects.filter(attempt__user=user).aggregate(
+            avg_time=Avg('time_taken')
+        )['avg_time'] or 0
+
+        overall_stats = {
+            "total_answers": total_answers,
+            "total_errors": total_errors,
+            "accuracy": percentage(total_answers - total_errors, total_answers),
+            "average_time_seconds": round(average_time, 2)
+        }
+
+        return Response({
+            "overall": overall_stats,
+            "categories": categories_chart,
+            "topics": topics_chart,
+            "answer_distribution": answer_distribution_chart,
+            "topic_accuracy": topic_accuracy_chart
         })

@@ -8,4 +8,6 @@ urlpatterns = [
 
     path('attempts/<int:attempt_id>/questions', quiz.QuizQuestionsView.as_view(), name='quiz-question'),
     path('attempts/<int:attempt_id>/answer', quiz.QuizAnswerView.as_view(), name='quiz-answer'),
+
+    path('statistics', quiz.Statistic.as_view(), name='statistics')
 ]
