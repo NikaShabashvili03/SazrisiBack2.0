@@ -1,6 +1,7 @@
 from django.contrib import admin
 from .models.category import Category, UserCategoryAccess
 from .models.quiz import Quiz, QuizAttempt, Question, UserAnswer, Topic
+from .models.blog import Blog
 from django import forms
 from ckeditor_uploader.widgets import CKEditorUploadingWidget
 
@@ -55,3 +56,6 @@ class UserAnswerAdmin(admin.ModelAdmin):
     list_filter = ['answered_at']
     search_fields = ['attempt__user__username']
     readonly_fields = ['answered_at']
+
+
+admin.site.register(Blog)

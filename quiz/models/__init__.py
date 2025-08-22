@@ -1,0 +1,1 @@
+from quiz.models.blog import Blog
