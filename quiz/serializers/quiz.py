@@ -31,7 +31,23 @@ class QuestionWithCorrectSerializer(serializers.ModelSerializer):
             return UserAnswerSerializer(user_answer).data
         except UserAnswer.DoesNotExist:
             return None
-    
+
+class QuizResultSerializer(serializers.ModelSerializer):
+    questions = serializers.SerializerMethodField()
+
+    class Meta:
+        model = QuizAttempt
+        fields = [
+            'id', 'quiz', 'status', 'score', 'total_questions', 'correct_answers',
+            'percentage', 'started_at', 'completed_at', 'time_taken',
+            'questions'
+        ]
+
+    def get_questions(self, obj):
+        questions = obj.quiz.questions.all()
+        return QuestionWithCorrectSerializer(
+            questions, many=True, context={'attempt_id': obj.id}
+        ).data
 
 class QuizSerializer(serializers.ModelSerializer):
     total_questions = serializers.SerializerMethodField()

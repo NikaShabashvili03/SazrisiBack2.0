@@ -8,7 +8,7 @@ from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from django.db import transaction
 from django.db.models import Count, Avg, Max
-from quiz.serializers.quiz import QuizAttemptSerializer, QuizSerializer, QuestionSerializer, QuestionWithCorrectSerializer, UserAnswer
+from quiz.serializers.quiz import QuizAttemptSerializer, QuizSerializer, QuestionSerializer, QuestionWithCorrectSerializer, UserAnswer, QuizResultSerializer
 
 from django.db.models import Count, Avg, Sum, F, Q, Max, Min, Case, When, IntegerField, FloatField, ExpressionWrapper
 from django.db.models.functions import TruncDate, TruncWeek, TruncMonth, Extract
@@ -212,7 +212,7 @@ class QuizAnswerView(APIView):
             "updated_attempt": serialized_attempt,
         })
 
-class QuizAttemptView(APIView):
+class QuizResultView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request, attempt_id):
@@ -220,13 +220,12 @@ class QuizAttemptView(APIView):
             QuizAttempt, 
             id=attempt_id, 
             user=request.user,
-            status__in=['completed']
+            status='completed'
         )
 
-        serializer = QuizAttemptSerializer(attempt).data
-
-        return Response(serializer)
-
+        serializer = QuizResultSerializer(attempt, context={'request': request})
+        return Response(serializer.data)
+    
 class Statistic(APIView):
     permission_classes = [IsAuthenticated]
 

@@ -8,7 +8,7 @@ urlpatterns = [
 
     path('attempts/<int:attempt_id>/questions', quiz.QuizQuestionsView.as_view(), name='quiz-question'),
     path('attempts/<int:attempt_id>/answer', quiz.QuizAnswerView.as_view(), name='quiz-answer'),
-    path('attempts/<int:attempt_id>/view', quiz.QuizAttemptView.as_view(), name='view-attempt'),
+    path('attempts/<int:attempt_id>/result', quiz.QuizResultView.as_view(), name='view-attempt'),
 
     path('statistics', quiz.Statistic.as_view(), name='statistics')
 ]
