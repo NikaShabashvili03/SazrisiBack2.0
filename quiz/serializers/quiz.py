@@ -34,15 +34,26 @@ class QuestionWithCorrectSerializer(serializers.ModelSerializer):
 
 class QuizResultSerializer(serializers.ModelSerializer):
     questions = serializers.SerializerMethodField()
+    quiz_file = serializers.SerializerMethodField()
 
     class Meta:
         model = QuizAttempt
         fields = [
-            'id', 'quiz', 'status', 'score', 'total_questions', 'correct_answers',
+            'id', 'quiz', 'quiz_file', 'status', 'score', 'total_questions', 'correct_answers',
             'percentage', 'started_at', 'completed_at', 'time_taken',
             'questions'
         ]
 
+
+    def get_quiz_file(self, obj):
+            if obj.quiz.file:
+                request = self.context.get('request')
+                file_url = obj.quiz.file.url
+                if request is not None:
+                    return request.build_absolute_uri(file_url)
+                return file_url
+            return None
+    
     def get_questions(self, obj):
         questions = obj.quiz.questions.all()
         return QuestionWithCorrectSerializer(
@@ -80,17 +91,27 @@ class QuizSerializer(serializers.ModelSerializer):
 
 class QuizAttemptSerializer(serializers.ModelSerializer):
     remaining_time = serializers.SerializerMethodField()
-
+    quiz_file = serializers.SerializerMethodField()
+    
     class Meta:
         model = QuizAttempt
         fields = ['id', 'quiz', 'status', 'score', 'total_questions', 'correct_answers',
                  'percentage', 'started_at', 'completed_at', 'time_taken',
-                 'remaining_time'
+                 'remaining_time', 'quiz_file'
                  ]
     
     def get_remaining_time(self, obj):
         return obj.get_remaining_time_from_answers()
-        
+
+    def get_quiz_file(self, obj):
+            if obj.quiz.file:
+                request = self.context.get('request')
+                file_url = obj.quiz.file.url
+                if request is not None:
+                    return request.build_absolute_uri(file_url)
+                return file_url
+            return None
+    
 class UserAnswerSerializer(serializers.ModelSerializer):
     class Meta:
         model = UserAnswer
