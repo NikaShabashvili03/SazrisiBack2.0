@@ -212,6 +212,21 @@ class QuizAnswerView(APIView):
             "updated_attempt": serialized_attempt,
         })
 
+class QuizAttemptView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, attempt_id):
+        attempt = get_object_or_404(
+            QuizAttempt, 
+            id=attempt_id, 
+            user=request.user,
+            status__in=['completed']
+        )
+
+        serializer = QuizAttemptSerializer(attempt).data
+
+        return Response(serializer)
+
 class Statistic(APIView):
     permission_classes = [IsAuthenticated]
 
@@ -221,7 +236,6 @@ class Statistic(APIView):
         def percentage(correct, total):
             return round((correct / total) * 100, 2) if total > 0 else 0
 
-        # === Category Stats ===
         category_stats = Quiz.objects.filter(attempts__user=user).values(
             'category__title'
         ).annotate(
