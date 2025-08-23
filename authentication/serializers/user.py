@@ -9,7 +9,7 @@ class UserChangePasswordSerializer(serializers.Serializer):
     new_password = serializers.CharField(write_only=True)
 
     def validate_prev_password(self, value):
-        user = self.context['request'].user.user
+        user = self.context['request'].user
         if not  check_password(value, user.password):
             raise serializers.ValidationError("Previous password is incorrect.")
         return value
@@ -22,7 +22,7 @@ class UserChangePasswordSerializer(serializers.Serializer):
         return value
 
     def save(self, **kwargs):
-        user = self.context['request'].user.user
+        user = self.context['request'].user
         user.set_password(self.validated_data['new_password'])
         user.save()
         return user
