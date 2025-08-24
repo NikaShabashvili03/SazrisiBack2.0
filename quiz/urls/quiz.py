@@ -10,5 +10,8 @@ urlpatterns = [
     path('attempts/<int:attempt_id>/answer', quiz.QuizAnswerView.as_view(), name='quiz-answer'),
     path('attempts/<int:attempt_id>/result', quiz.QuizResultView.as_view(), name='view-attempt'),
 
-    path('statistics', quiz.Statistic.as_view(), name='statistics')
+    path('statistics', quiz.Statistic.as_view(), name='statistics'),
+
+    path("attempts/<int:attempt_id>/notes/", quiz.BlackNoteListCreateView.as_view(), name="blacknote-list-create"),
+    path("notes/<int:note_id>/", quiz.BlackNoteDeleteView.as_view(), name="blacknote-delete"),
 ]

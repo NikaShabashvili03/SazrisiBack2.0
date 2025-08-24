@@ -4,13 +4,16 @@ from ckeditor_uploader.fields import RichTextUploadingField
 import uuid
 import os
 from django.core.exceptions import ValidationError
+from core.utils import image_upload, validate_image
+
+def upload_image(instance, filename):
+    return image_upload(instance, filename, 'black_notes/')
 
 def unique_file_upload_path(instance, filename):
     ext = filename.split('.')[-1]
     filename_base = os.path.splitext(filename)[0]
     unique_id = uuid.uuid4().hex 
     return f"quiz_files/{filename_base}_{unique_id}.{ext}"
-
 
 def validate_pdf(file):
     if not file.name.lower().endswith('.pdf'):
@@ -112,6 +115,36 @@ class QuizAttempt(models.Model):
         interacted_questions = self.user_answers.count()
         return interacted_questions >= total_questions
 
+class BlackNote(models.Model):
+    attempt = models.ForeignKey(
+        QuizAttempt,
+        on_delete=models.CASCADE,
+        related_name="notes"
+    )
+
+    user = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        related_name="black_notes"
+    )
+
+    note = models.ImageField(upload_to=upload_image, null=False, blank=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def save(self, *args, **kwargs):
+            if self.note:
+                try:
+                    self.note = validate_image(image_field=self.note, max_size_kb=1200, compress_quality=75, path='black_notes/')
+                except (FileNotFoundError, ValueError, ValidationError):
+                    self.note = None
+            super().save(*args, **kwargs)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return f"Note by {self.user} on {self.attempt}"
+    
 class Topic(models.Model):
     name = models.CharField(max_length=255)
     url = models.URLField()

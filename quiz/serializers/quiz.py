@@ -1,4 +1,4 @@
-from quiz.models.quiz import Quiz, QuizAttempt, Question, UserAnswer, Topic
+from quiz.models.quiz import Quiz, QuizAttempt, Question, UserAnswer, Topic, BlackNote
 from rest_framework import serializers
 
 class TopicSerializer(serializers.ModelSerializer):
@@ -60,6 +60,7 @@ class QuizResultSerializer(serializers.ModelSerializer):
             questions, many=True, context={'attempt_id': obj.id}
         ).data
 
+    
 class QuizSerializer(serializers.ModelSerializer):
     total_questions = serializers.SerializerMethodField()
     total_score = serializers.SerializerMethodField()
@@ -117,3 +118,19 @@ class UserAnswerSerializer(serializers.ModelSerializer):
         model = UserAnswer
         fields = ['id', 'selected_answer', 'is_correct', 
                  'answered_at', 'time_taken']
+        
+class BlackNoteSerializer(serializers.ModelSerializer):
+    note = serializers.SerializerMethodField()
+
+    class Meta:
+        model = BlackNote
+        fields = ["id", "attempt", "note", "created_at"]
+
+    def get_note(self, obj):
+        if obj.note and hasattr(obj.note, "url"):
+            return obj.note.url
+        return None
+    
+
+class BlackNoteCreateSerializer(serializers.Serializer):
+    note = serializers.ImageField(required=True)

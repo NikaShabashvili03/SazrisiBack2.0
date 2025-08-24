@@ -1,5 +1,5 @@
 from quiz.models.category import Category
-from quiz.models.quiz import Quiz, QuizAttempt, Question
+from quiz.models.quiz import Quiz, QuizAttempt, Question, BlackNote
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
@@ -8,7 +8,7 @@ from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from django.db import transaction
 from django.db.models import Count, Avg, Max
-from quiz.serializers.quiz import QuizAttemptSerializer, QuizSerializer, QuestionSerializer, QuestionWithCorrectSerializer, UserAnswer, QuizResultSerializer
+from quiz.serializers.quiz import QuizAttemptSerializer, QuizSerializer, QuestionSerializer, QuestionWithCorrectSerializer, UserAnswer, QuizResultSerializer, BlackNoteSerializer, BlackNoteCreateSerializer
 
 from django.db.models import Count, Avg, Sum, F, Q, Max, Min, Case, When, IntegerField, FloatField, ExpressionWrapper
 from django.db.models.functions import TruncDate, TruncWeek, TruncMonth, Extract
@@ -16,7 +16,7 @@ from collections import defaultdict
 import math
 from datetime import timedelta, datetime
 from quiz.models.quiz import UserAnswer, Quiz, Question, Topic
-
+from rest_framework.parsers import MultiPartParser, FormParser
 
 class QuizListView(APIView):
     permission_classes = [IsAuthenticated]
@@ -366,3 +366,71 @@ class Statistic(APIView):
             "answer_distribution": answer_distribution_chart,
             "topic_accuracy": topic_accuracy_chart
         })
+    
+
+class BlackNoteListCreateView(APIView):
+    permission_classes = [IsAuthenticated]
+    parser_classes = [MultiPartParser, FormParser]
+
+    def get(self, request, attempt_id):
+        attempt = get_object_or_404(QuizAttempt, id=attempt_id, user=request.user)
+        notes = attempt.notes.all()
+        serializer = BlackNoteSerializer(notes, many=True, context={"request": request})
+        return Response(serializer.data)
+
+    def post(self, request, attempt_id):
+        serializer = BlackNoteCreateSerializer(data=request.data)
+        if serializer.is_valid():
+            attempt = get_object_or_404(QuizAttempt, id=attempt_id)
+
+            black_note = BlackNote.objects.create(
+                attempt=attempt,
+                user=request.user,
+                note=serializer.validated_data.get("note")
+            )
+
+            return Response(
+                BlackNoteSerializer(black_note).data,
+                status=status.HTTP_201_CREATED
+            )
+
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+ 
+class BlackNoteDeleteView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def delete(self, request, note_id):
+        note = get_object_or_404(BlackNote, id=note_id, user=request.user)
+
+        if note.attempt.status == "completed":
+            return Response(
+                {"error": "Cannot delete notes for a completed attempt."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        note.delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)
+    
+    
+    def patch(self, request, note_id):
+        note = get_object_or_404(BlackNote, id=note_id, user=request.user)
+
+        if note.attempt.status == "completed":
+            return Response(
+                {"error": "Cannot update notes for a completed attempt."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        serializer = BlackNoteCreateSerializer(data=request.data, partial=True)
+        if serializer.is_valid():
+            new_note = serializer.validated_data.get("note")
+            if new_note:
+                note.note = new_note
+                note.save()
+
+            return Response(
+                BlackNoteSerializer(note, context={"request": request}).data,
+                status=status.HTTP_200_OK
+            )
+
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)

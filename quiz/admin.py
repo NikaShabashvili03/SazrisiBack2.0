@@ -1,10 +1,11 @@
 from django.contrib import admin
 from .models.category import Category, UserCategoryAccess
-from .models.quiz import Quiz, QuizAttempt, Question, UserAnswer, Topic
+from .models.quiz import Quiz, QuizAttempt, Question, UserAnswer, Topic, BlackNote
 from .models.blog import Blog
 from django import forms
 from ckeditor_uploader.widgets import CKEditorUploadingWidget
 
+admin.site.register(BlackNote)
 
 admin.site.register(Topic)
 
