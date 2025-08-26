@@ -23,7 +23,7 @@ class UserChangePasswordSerializer(serializers.Serializer):
     def validate_prev_password(self, value):
         user = self.context['request'].user
         if not check_password(value, user.password):
-            raise serializers.ValidationError("Previous password is incorrect.")
+            raise serializers.ValidationError("ძველი პაროლი არასწორია!")
         return value
 
     def validate_new_password(self, value):
