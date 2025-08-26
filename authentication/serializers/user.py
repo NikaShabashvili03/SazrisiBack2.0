@@ -13,8 +13,8 @@ def custom_password_validator(value):
         raise ValidationError("პაროლი უნდა შეიცავდეს მინიმუმ ერთ რიცხვს.")
     if not re.search(r"[A-Za-z]", value):
         raise ValidationError("პაროლი უნდა შეიცავდეს მინიმუმ ერთ ასოს.")
-    if not re.search(r"[@!.,]", value):
-        raise ValidationError("პაროლი უნდა შეიცავდეს მინიმუმ ერთ სპეციალურ სიმბოლოს (@ ! . ,).")
+    if not re.search(r"[^A-Za-z0-9]", value):
+        raise ValidationError("პაროლი უნდა შეიცავდეს მინიმუმ ერთ სპეციალურ სიმბოლოს ( მაგალითად: !@#$%^&* ).")
 
 class UserChangePasswordSerializer(serializers.Serializer):
     prev_password = serializers.CharField(write_only=True)
