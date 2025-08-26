@@ -124,7 +124,7 @@ class UserLogoutView(generics.GenericAPIView):
     def post(self, request, *args, **kwargs):
         user = request.user
         sessions = UserSession.objects.filter(user_id=user)
-        response = Response({'details': 'Logged out successfully'}, status=status.HTTP_200_OK)
+        response = Response({'details': 'მომხმარებლის გასვლა მოხერხდა წარმატებით!'}, status=status.HTTP_200_OK)
         if sessions:
             sessions.delete()
             response.set_cookie(
@@ -138,7 +138,7 @@ class UserLogoutView(generics.GenericAPIView):
                 samesite='Lax'
             )
         else:
-            response = Response({'details': 'Invalid session token'}, status=status.HTTP_400_BAD_REQUEST)
+            response = Response({'details': 'არასწორი ტოკენი!'}, status=status.HTTP_400_BAD_REQUEST)
             
         return response
 
@@ -160,5 +160,5 @@ class UserChangePassword(APIView):
         serializer = UserChangePasswordSerializer(data=request.data, context={'request': request})
         if serializer.is_valid():
             serializer.save()
-            return Response({"detail": "Password updated successfully."}, status=status.HTTP_200_OK)
+            return Response({"detail": "პაროლი განახლდა წარმატებით."}, status=status.HTTP_200_OK)
         return Response({"detail": serializer.errors}, status=status.HTTP_400_BAD_REQUEST)

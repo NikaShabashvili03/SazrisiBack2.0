@@ -28,10 +28,6 @@ class UserChangePasswordSerializer(serializers.Serializer):
 
     def validate_new_password(self, value):
         try:
-            django_validate_password(value)
-        except ValidationError as e:
-            raise serializers.ValidationError(e.messages)
-        try:
             custom_password_validator(value)
         except ValidationError as e:
             raise serializers.ValidationError(e.messages)
@@ -53,18 +49,12 @@ class UserRegisterSerializer(serializers.Serializer):
 
     def validate_email(self, email):
         if User.objects.filter(email=email).exists():
-            raise serializers.ValidationError("A user with this email already exists.")
+            raise serializers.ValidationError("მომხმარებელი ამ ემაილით უკვე არსებობს!")
         return email
     
     def validate(self, attrs):
         if attrs['password'] != attrs['rePassword']:
             raise serializers.ValidationError({"rePassword": "პაროლები არ ემთხვევა."})
-
-        try:
-            django_validate_password(attrs['password'])
-        except ValidationError as e:
-            raise serializers.ValidationError({"password": ["პაროლი სუსტია: " + msg for msg in e.messages]})
-
         try:
             custom_password_validator(attrs['password'])
         except ValidationError as e:
@@ -92,9 +82,9 @@ class UserLoginSerializer(serializers.Serializer):
             if user.check_password(data['password']):
                 return user
             else:
-                raise serializers.ValidationError("Invalid credentials")
+                raise serializers.ValidationError("არასწორი ემაილი ან პაროლი!")
         except User.DoesNotExist:
-            raise serializers.ValidationError("User does not exist")
+            raise serializers.ValidationError("მომხმარებელი ვერ მოიძებნა!")
 
 class AvatarUploadSerializer(serializers.ModelSerializer):
     image = serializers.ImageField(write_only=True, required=True)
