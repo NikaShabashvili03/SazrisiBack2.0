@@ -3,6 +3,18 @@ from ..models import User, Avatar, Preferences
 from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError
 from django.contrib.auth.hashers import check_password
+from django.contrib.auth.password_validation import validate_password as django_validate_password
+import re
+
+def custom_password_validator(value):
+    if len(value) < 8:
+        raise ValidationError("პაროლი უნდა შეიცავდეს მინიმუმ 8 სიმბოლოს.")
+    if not re.search(r"[0-9]", value):
+        raise ValidationError("პაროლი უნდა შეიცავდეს მინიმუმ ერთ რიცხვს.")
+    if not re.search(r"[A-Za-z]", value):
+        raise ValidationError("პაროლი უნდა შეიცავდეს მინიმუმ ერთ ასოს.")
+    if not re.search(r"[@!.,]", value):
+        raise ValidationError("პაროლი უნდა შეიცავდეს მინიმუმ ერთ სპეციალურ სიმბოლოს (@ ! . ,).")
 
 class UserChangePasswordSerializer(serializers.Serializer):
     prev_password = serializers.CharField(write_only=True)
@@ -10,15 +22,20 @@ class UserChangePasswordSerializer(serializers.Serializer):
 
     def validate_prev_password(self, value):
         user = self.context['request'].user
-        if not  check_password(value, user.password):
+        if not check_password(value, user.password):
             raise serializers.ValidationError("Previous password is incorrect.")
         return value
 
     def validate_new_password(self, value):
         try:
-            validate_password(value)
+            django_validate_password(value)
         except ValidationError as e:
             raise serializers.ValidationError(e.messages)
+        try:
+            custom_password_validator(value)
+        except ValidationError as e:
+            raise serializers.ValidationError(e.messages)
+
         return value
 
     def save(self, **kwargs):
@@ -41,7 +58,18 @@ class UserRegisterSerializer(serializers.Serializer):
     
     def validate(self, attrs):
         if attrs['password'] != attrs['rePassword']:
-            raise serializers.ValidationError({"rePassword": "Passwords do not match."})
+            raise serializers.ValidationError({"rePassword": "პაროლები არ ემთხვევა."})
+
+        try:
+            django_validate_password(attrs['password'])
+        except ValidationError as e:
+            raise serializers.ValidationError({"password": ["პაროლი სუსტია: " + msg for msg in e.messages]})
+
+        try:
+            custom_password_validator(attrs['password'])
+        except ValidationError as e:
+            raise serializers.ValidationError({"password": e.messages})
+
         return attrs
 
     def create(self, validated_data):
