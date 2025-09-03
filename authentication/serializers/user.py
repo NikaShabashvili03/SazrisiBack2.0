@@ -5,7 +5,6 @@ from django.core.exceptions import ValidationError
 from django.contrib.auth.hashers import check_password
 from django.contrib.auth.password_validation import validate_password as django_validate_password
 import re
-from ..models import UserSession
 
 def custom_password_validator(value):
     if len(value) < 8:
@@ -39,7 +38,6 @@ class UserChangePasswordSerializer(serializers.Serializer):
         user = self.context['request'].user
         user.set_password(self.validated_data['new_password'])
         user.save()
-        UserSession.objects.filter(user=user).delete()
         return user
     
 class UserRegisterSerializer(serializers.Serializer):

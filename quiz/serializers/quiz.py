@@ -18,7 +18,7 @@ class QuestionWithCorrectSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Question
-        fields = ['id', 'explanation', 'score', 'order', 'answer', 'user_answer', 'topic']
+        fields = ['id', 'score', 'order', 'answer', 'user_answer', 'topic']
 
     def get_user_answer(self, obj):
         attempt_id = self.context.get("attempt_id")
@@ -35,11 +35,12 @@ class QuestionWithCorrectSerializer(serializers.ModelSerializer):
 class QuizResultSerializer(serializers.ModelSerializer):
     questions = serializers.SerializerMethodField()
     quiz_file = serializers.SerializerMethodField()
+    quiz_explanation = serializers.SerializerMethodField()
 
     class Meta:
         model = QuizAttempt
         fields = [
-            'id', 'quiz', 'quiz_file', 'status', 'score', 'total_questions', 'correct_answers',
+            'id', 'quiz', 'quiz_file', 'quiz_explanation', 'status', 'score', 'total_questions', 'correct_answers',
             'percentage', 'started_at', 'completed_at', 'time_taken',
             'questions'
         ]
@@ -53,6 +54,15 @@ class QuizResultSerializer(serializers.ModelSerializer):
                     return request.build_absolute_uri(file_url)
                 return file_url
             return None
+
+    def get_quiz_explanation(self, obj):
+        if obj.quiz.explanation:
+            request = self.context.get('request')
+            file_url = obj.quiz.explanation.url
+            if request is not None:
+                return request.build_absolute_uri(file_url)
+            return file_url
+        return None
     
     def get_questions(self, obj):
         questions = obj.quiz.questions.all()

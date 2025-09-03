@@ -15,6 +15,12 @@ def unique_file_upload_path(instance, filename):
     unique_id = uuid.uuid4().hex 
     return f"quiz_files/{filename_base}_{unique_id}.{ext}"
 
+def unique_exp_upload_path(instance, filename):
+    ext = filename.split('.')[-1]
+    filename_base = os.path.splitext(filename)[0]
+    unique_id = uuid.uuid4().hex 
+    return f"quiz_explanation/{filename_base}_{unique_id}.{ext}"
+
 def validate_pdf(file):
     if not file.name.lower().endswith('.pdf'):
         raise ValidationError('Only PDF files are allowed.')
@@ -29,8 +35,15 @@ class Quiz(models.Model):
     file = models.FileField(
         upload_to=unique_file_upload_path,
         validators=[validate_pdf],
-        blank=True,
-        null=True
+        blank=False,
+        null=False
+    )
+
+    explanation = models.FileField(
+        upload_to=unique_exp_upload_path,
+        validators=[validate_pdf],
+        blank=False,
+        null=False
     )
 
     created_at = models.DateTimeField(auto_now_add=True)
@@ -162,10 +175,10 @@ class Question(models.Model):
 
     topic = models.ForeignKey(Topic, on_delete=models.CASCADE, related_name="questions")
     quiz = models.ForeignKey(Quiz, on_delete=models.CASCADE, related_name='questions')
-    explanation = RichTextUploadingField('Explanation', config_name='explanation')
+
     answer = models.CharField(max_length=1, choices=ANSWER_CHOICES, default=None)
     score = models.IntegerField(default=1)
-    order = models.IntegerField(default=0)
+    order = models.IntegerField(default=1, blank=True)
     
     created_at = models.DateTimeField(auto_now_add=True)
     
@@ -173,10 +186,10 @@ class Question(models.Model):
         ordering = ['quiz', 'order']
     
     def save(self, *args, **kwargs):
-        if self._state.adding and self.order == 0:
+        if self._state.adding and self.order == 1:
             last_order = Question.objects.filter(quiz=self.quiz).aggregate(
                 max_order=models.Max('order')
-            )['max_order'] or 0
+            )['max_order'] or 1
             self.order = last_order + 1
         super().save(*args, **kwargs)
     

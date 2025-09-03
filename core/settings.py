@@ -225,14 +225,6 @@ CKEDITOR_CONFIGS = {
         'mathJaxLib': 'https://cdn.jsdelivr.net/npm/mathjax@2/MathJax.js?config=TeX-MML-AM_CHTML',
         'allowedContent': True,
     },
-    'explanation': {
-        'toolbar': 'basic',
-        'height': 200,
-        'width': '100%',
-        'extraPlugins': 'mathjax',
-        'mathJaxLib': 'https://cdn.jsdelivr.net/npm/mathjax@2/MathJax.js?config=TeX-MML-AM_CHTML',
-        'allowedContent': True,
-    },
     'answer_editor': {
         'toolbar': 'basic',
         'height': 200,

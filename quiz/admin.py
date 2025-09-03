@@ -23,8 +23,7 @@ class QuizAdmin(admin.ModelAdmin):
 
 
 class QuestionAdminForm(forms.ModelForm):
-    explanation = forms.CharField(widget=CKEditorUploadingWidget(config_name='default'))
-  
+
     class Meta:
         model = Question
         fields = '__all__'
