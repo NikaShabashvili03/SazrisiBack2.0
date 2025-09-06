@@ -498,7 +498,7 @@ class LeaderboardView(APIView):
             total_score=Sum('score'),
             total_time_taken=Sum('time_taken'),
             total_correct_answers=Sum('correct_answers'),
-            total_questions=Count('quiz__questions')
+            total_questions=Sum('quiz__questions')
         ).order_by('-total_score', 'total_time_taken')[:leaderboard_size]
 
         user_ids = [a['user'] for a in attempts]
