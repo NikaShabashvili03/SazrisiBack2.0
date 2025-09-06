@@ -443,6 +443,8 @@ class LeaderboardView(APIView):
     def get(self, request):
         leaderboard_type = request.query_params.get('type', 'day')
         leaderboard_size = request.query_params.get('size', 20)
+        category_id = request.query_params.get('category_id')  # optional
+        quiz_id = request.query_params.get('quiz_id')  # optional
 
         try:
             leaderboard_size = int(leaderboard_size)
@@ -469,10 +471,19 @@ class LeaderboardView(APIView):
         else:
             return Response({"error": "Invalid leaderboard type"}, status=400)
 
-        attempts = QuizAttempt.objects.filter(
+        # Base queryset
+        attempts_qs = QuizAttempt.objects.filter(
             status='completed',
             completed_at__gte=start_date,
-        ).values('user').annotate(
+        )
+
+        if category_id:
+            attempts_qs = attempts_qs.filter(quiz__category_id=category_id)
+
+        if quiz_id:
+            attempts_qs = attempts_qs.filter(quiz_id=quiz_id)
+
+        attempts = attempts_qs.values('user').annotate(
             total_score=Sum('score'),
             total_time_taken=Sum('time_taken')
         ).order_by('-total_score', 'total_time_taken')[:leaderboard_size]
