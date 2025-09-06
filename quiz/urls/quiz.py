@@ -14,4 +14,6 @@ urlpatterns = [
 
     path("attempts/<int:attempt_id>/notes/", quiz.BlackNoteListCreateView.as_view(), name="blacknote-list-create"),
     path("notes/<int:note_id>/", quiz.BlackNoteDeleteView.as_view(), name="blacknote-delete"),
+
+    path('leaderboard', quiz.LeaderboardView.as_view(), name='leaderboard')
 ]

@@ -1,5 +1,6 @@
 from quiz.models.category import Category
 from quiz.models.quiz import Quiz, QuizAttempt, Question, BlackNote
+from authentication.models.user import User
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
@@ -8,7 +9,7 @@ from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from django.db import transaction
 from django.db.models import Count, Avg, Max
-from quiz.serializers.quiz import QuizAttemptSerializer, QuizSerializer, QuestionSerializer, QuestionWithCorrectSerializer, UserAnswer, QuizResultSerializer, BlackNoteSerializer, BlackNoteCreateSerializer
+from quiz.serializers.quiz import QuizAttemptSerializer, QuizSerializer, QuestionSerializer, QuestionWithCorrectSerializer, UserAnswer, QuizResultSerializer, BlackNoteSerializer, BlackNoteCreateSerializer, LeaderboardSerializer
 
 from django.db.models import Count, Avg, Sum, F, Q, Max, Min, Case, When, IntegerField, FloatField, ExpressionWrapper
 from django.db.models.functions import TruncDate, TruncWeek, TruncMonth, Extract
@@ -434,3 +435,63 @@ class BlackNoteDeleteView(APIView):
             )
 
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+    
+
+class LeaderboardView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        leaderboard_type = request.query_params.get('type', 'day')
+        leaderboard_size = request.query_params.get('size', 20)
+
+        try:
+            leaderboard_size = int(leaderboard_size)
+            if leaderboard_size <= 0:
+                raise ValueError
+        except (ValueError, TypeError):
+            return Response({"error": "Invalid leaderboard size"}, status=400)
+
+        now = timezone.now()
+
+        if leaderboard_type == 'day':
+            start_date = now.replace(hour=0, minute=0, second=0, microsecond=0)
+        elif leaderboard_type == 'week':
+            start_date = now - timedelta(days=now.weekday())
+        elif leaderboard_type == 'month':
+            start_date = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+        elif leaderboard_type == 'semester':
+            if now.month <= 6:
+                start_date = now.replace(month=1, day=1, hour=0, minute=0, second=0, microsecond=0)
+            else:
+                start_date = now.replace(month=7, day=1, hour=0, minute=0, second=0, microsecond=0)
+        elif leaderboard_type == 'year':
+            start_date = now.replace(month=1, day=1, hour=0, minute=0, second=0, microsecond=0)
+        else:
+            return Response({"error": "Invalid leaderboard type"}, status=400)
+
+        attempts = QuizAttempt.objects.filter(
+            status='completed',
+            completed_at__gte=start_date,
+        ).values('user').annotate(
+            total_score=Sum('score'),
+            total_time_taken=Sum('time_taken')
+        ).order_by('-total_score', 'total_time_taken')[:leaderboard_size]
+
+        user_ids = [a['user'] for a in attempts]
+        users = User.objects.in_bulk(user_ids)
+
+        leaderboard = []
+        for idx, item in enumerate(attempts, start=1):
+            user = users.get(item['user'])
+            if not user:
+                continue
+
+            leaderboard.append({
+                "position": idx,
+                "user": user,
+                "total_score": item['total_score'],
+                "total_time_taken_seconds": round(item['total_time_taken'].total_seconds() if item['total_time_taken'] else 0, 2)
+            })
+
+        serializer = LeaderboardSerializer(leaderboard, many=True)
+        return Response(serializer.data)

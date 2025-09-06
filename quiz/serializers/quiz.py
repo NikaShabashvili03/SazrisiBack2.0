@@ -1,5 +1,6 @@
 from quiz.models.quiz import Quiz, QuizAttempt, Question, UserAnswer, Topic, BlackNote
 from rest_framework import serializers
+from authentication.serializers.user import UserProfileSerializer
 
 class TopicSerializer(serializers.ModelSerializer):
     class Meta:
@@ -144,3 +145,9 @@ class BlackNoteSerializer(serializers.ModelSerializer):
 
 class BlackNoteCreateSerializer(serializers.Serializer):
     note = serializers.ImageField(required=True)
+
+class LeaderboardSerializer(serializers.Serializer):
+    position = serializers.IntegerField()
+    user = UserProfileSerializer()
+    total_score = serializers.IntegerField()
+    total_time_taken_seconds = serializers.FloatField()
