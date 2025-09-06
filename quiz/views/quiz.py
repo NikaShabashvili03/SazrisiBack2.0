@@ -486,7 +486,6 @@ class LeaderboardView(APIView):
             attempts_qs = attempts_qs.filter(quiz_id=quiz_id)
 
         if search:
-            # ეს აერთიანებს პირველი სახელი + გვარი და ეძებს search სტრინგს
             attempts_qs = attempts_qs.annotate(
                 full_name=Concat('user__firstname', Value(' '), 'user__lastname')
             ).filter(
@@ -497,7 +496,12 @@ class LeaderboardView(APIView):
 
         attempts = attempts_qs.values('user').annotate(
             total_score=Sum('score'),
-            total_time_taken=Sum('time_taken')
+            total_time_taken=Sum('time_taken'),
+            correct_answers=Count(
+                'answers',
+                filter=Q(answers__is_correct=True),
+                distinct=True
+            )
         ).order_by('-total_score', 'total_time_taken')[:leaderboard_size]
 
         user_ids = [a['user'] for a in attempts]
@@ -513,7 +517,8 @@ class LeaderboardView(APIView):
                 "position": idx,
                 "user": user,
                 "total_score": item['total_score'],
-                "total_time_taken_seconds": round(item['total_time_taken'].total_seconds() if item['total_time_taken'] else 0, 2)
+                "total_time_taken_seconds": round(item['total_time_taken'].total_seconds() if item['total_time_taken'] else 0, 2),
+                "correct_answers": item['correct_answers']
             })
 
         serializer = LeaderboardSerializer(leaderboard, many=True)
