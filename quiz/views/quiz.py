@@ -18,6 +18,8 @@ import math
 from datetime import timedelta, datetime
 from quiz.models.quiz import UserAnswer, Quiz, Question, Topic
 from rest_framework.parsers import MultiPartParser, FormParser
+from django.db.models import Q, Value
+from django.db.models.functions import Concat
 
 class QuizListView(APIView):
     permission_classes = [IsAuthenticated]
@@ -484,9 +486,13 @@ class LeaderboardView(APIView):
             attempts_qs = attempts_qs.filter(quiz_id=quiz_id)
 
         if search:
-            attempts_qs = attempts_qs.filter(
+            # ეს აერთიანებს პირველი სახელი + გვარი და ეძებს search სტრინგს
+            attempts_qs = attempts_qs.annotate(
+                full_name=Concat('user__firstname', Value(' '), 'user__lastname')
+            ).filter(
                 Q(user__firstname__icontains=search) |
-                Q(user__lastname__icontains=search)
+                Q(user__lastname__icontains=search) |
+                Q(full_name__icontains=search)
             )
 
         attempts = attempts_qs.values('user').annotate(
