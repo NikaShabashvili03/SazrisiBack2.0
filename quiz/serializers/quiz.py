@@ -152,4 +152,3 @@ class LeaderboardSerializer(serializers.Serializer):
     total_score = serializers.IntegerField()
     total_time_taken_seconds = serializers.FloatField()
     correct_answers = serializers.IntegerField()
-    total_questions = serializers.IntegerField()

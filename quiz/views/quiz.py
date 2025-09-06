@@ -497,8 +497,7 @@ class LeaderboardView(APIView):
         attempts = attempts_qs.values('user').annotate(
             total_score=Sum('score'),
             total_time_taken=Sum('time_taken'),
-            total_correct_answers=Sum('correct_answers'),
-            total_questions=Sum('quiz__questions')
+            total_correct_answers=Sum('correct_answers')
         ).order_by('-total_score', 'total_time_taken')[:leaderboard_size]
 
         user_ids = [a['user'] for a in attempts]
@@ -515,8 +514,7 @@ class LeaderboardView(APIView):
                 "user": user,
                 "total_score": item['total_score'],
                 "total_time_taken_seconds": round(item['total_time_taken'].total_seconds() if item['total_time_taken'] else 0, 2),
-                "correct_answers": item['total_correct_answers'],
-                "total_questions": item['total_questions']
+                "correct_answers": item['total_correct_answers']
             })
 
         serializer = LeaderboardSerializer(leaderboard, many=True)
