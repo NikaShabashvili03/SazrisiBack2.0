@@ -61,7 +61,6 @@ class Quiz(models.Model):
     def __str__(self):
         return f"{self.title} - {self.category.title}"
 
-
 class QuizAttempt(models.Model):
     STATUS_CHOICES = [
         ('started', 'Started'),
