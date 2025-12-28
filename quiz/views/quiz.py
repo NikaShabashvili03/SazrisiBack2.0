@@ -1,13 +1,13 @@
 from quiz.models.category import Category
 from quiz.models.quiz import Quiz, QuizAttempt, Question, BlackNote
 from authentication.models.user import User
+from authentication.models.session import UserSession
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
 from rest_framework.permissions import IsAuthenticated
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
-from django.db import transaction
 from django.db.models import Count, Avg, Max
 from quiz.serializers.quiz import QuizAttemptSerializer, QuizSerializer, QuestionSerializer, QuestionWithCorrectSerializer, UserAnswer, QuizResultSerializer, BlackNoteSerializer, BlackNoteCreateSerializer, LeaderboardSerializer
 
@@ -235,9 +235,11 @@ class Statistic(APIView):
     def get(self, request):
         user = request.user
 
+        # დამხმარე ფუნქცია პროცენტების გამოსათვლელად
         def percentage(correct, total):
             return round((correct / total) * 100, 2) if total > 0 else 0
 
+        # === 1. Category Stats (Chart) ===
         category_stats = Quiz.objects.filter(attempts__user=user).values(
             'category__title'
         ).annotate(
@@ -272,7 +274,7 @@ class Statistic(APIView):
             }
         }
 
-        # === Topic Stats ===
+        # === 2. Topic Stats (Chart) ===
         topic_stats = Topic.objects.annotate(
             total_answers=Count(
                 'questions__useranswer',
@@ -305,7 +307,7 @@ class Statistic(APIView):
             }
         }
 
-        # === Answer Distribution (for Pie/Bar chart) ===
+        # === 3. Answer Distribution (Pie/Bar chart) ===
         distribution = {
             label: UserAnswer.objects.filter(
                 attempt__user=user, selected_answer=label.lower()
@@ -320,7 +322,7 @@ class Statistic(APIView):
             }
         }
 
-        # === Topic Accuracy (Correct vs Incorrect)
+        # === 4. Topic Accuracy (Correct vs Incorrect) ===
         topic_accuracy_stats = Topic.objects.annotate(
             correct=Count(
                 'questions__useranswer',
@@ -348,18 +350,39 @@ class Statistic(APIView):
             topic_accuracy_chart["datasets"]["incorrect"].append(t.incorrect)
             topic_accuracy_chart["datasets"]["accuracy_percentage"].append(percentage(t.correct, total))
 
-        # === Overall Stats ===
+        # === 5. Overall Stats (განახლებული ნაწილი) ===
+        
+        # არსებული სტატისტიკა (პასუხები და დრო)
         total_answers = UserAnswer.objects.filter(attempt__user=user).count()
         total_errors = UserAnswer.objects.filter(attempt__user=user, is_correct=False).count()
         average_time = UserAnswer.objects.filter(attempt__user=user).aggregate(
             avg_time=Avg('time_taken')
         )['avg_time'] or 0
 
+        # ახალი: აგრეგაცია Attempt მოდელიდან (ქულები და საუკეთესო შედეგი)
+        attempts_aggregation = QuizAttempt.objects.filter(user=user).aggregate(
+            total_score=Sum('score'), # ჯამური ქულა
+            best_score=Max('score')   # საუკეთესო შედეგი (მაქსიმალური ქულა)
+        )
+
+        total_quizzes_taken = QuizAttempt.objects.filter(user=user).count() # გავლილი ტესტების რაოდენობა
+        total_accumulated_points = attempts_aggregation['total_score'] or 0
+        best_result_percent = attempts_aggregation['best_score'] or 0
+
+        # ახალი: შესვლების რაოდენობა (უსაფრთხო გამოძახება)
+        login_count = UserSession.objects.filter(user=user).count()
+
         overall_stats = {
             "total_answers": total_answers,
             "total_errors": total_errors,
             "accuracy": percentage(total_answers - total_errors, total_answers),
-            "average_time_seconds": round(average_time, 2)
+            "average_time_seconds": round(average_time, 2),
+            
+            # დამატებული ველები:
+            "total_quizzes_taken": total_quizzes_taken,     # გავლილი ტესტები
+            "total_accumulated_points": total_accumulated_points, # ჯამური ქულა
+            "best_result_percent": best_result_percent,     # საუკეთესო შედეგი
+            "login_count": login_count                      # შესვლების რაოდენობა
         }
 
         return Response({
