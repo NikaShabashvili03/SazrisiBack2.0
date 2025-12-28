@@ -105,11 +105,7 @@ class UserLoginView(generics.GenericAPIView):
         
         user_data = UserProfileSerializer(user).data
         
-        response = Response({
-            "user": user_data,
-            "token": session.session_token
-        }, status=status.HTTP_200_OK)
-
+        response = Response(user_data, status=status.HTTP_201_CREATED)
         response.set_cookie(
             'session_token',
             session.session_token,
