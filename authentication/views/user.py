@@ -111,8 +111,8 @@ class UserLoginView(generics.GenericAPIView):
             session.session_token,
             expires=expires_at,
             httponly=False,
-            secure=False, 
-            samesite='Lax' 
+            secure=True, 
+            samesite='None' # samesite='Lax' 
         )
         csrf_token = get_token(request)
         response['X-CSRFToken'] = csrf_token
