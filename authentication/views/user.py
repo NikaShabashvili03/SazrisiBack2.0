@@ -126,7 +126,7 @@ class UserLogoutView(generics.GenericAPIView):
         sessions = UserSession.objects.filter(user_id=user)
         response = Response({'details': 'მომხმარებლის გასვლა მოხერხდა წარმატებით!'}, status=status.HTTP_200_OK)
         if sessions:
-            sessions.delete()
+            # sessions.delete()
             response.set_cookie(
                 'session_token',  
                 value='',  
