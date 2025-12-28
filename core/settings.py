@@ -24,7 +24,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 SECRET_KEY = 'django-insecure-om30w)leq6du+h*ywl=+eu+rox&r+az*687!qihwc37v90%w%b'
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+DEBUG = False
 from corsheaders.defaults import default_headers
 
 CORS_ALLOW_ALL_ORIGINS = True
