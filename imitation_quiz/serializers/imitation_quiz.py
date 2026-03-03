@@ -51,7 +51,8 @@ class ImitationAttemptSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'code', 'status', 'score', 'total_questions', 
             'correct_answers', 'percentage', 'started_at', 
-            'completed_at', 'time_taken', 'remaining_time', 'quiz_file', 'user'
+            'completed_at', 'time_taken', 'remaining_time', 'quiz_file', 'user',
+            'laptop_type'
         ]
 
     def get_remaining_time(self, obj):
