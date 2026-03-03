@@ -38,8 +38,6 @@ class ImitationAccessView(APIView):
 
         laptop_type = request.data.get('laptop_type')
         
-        laptop_type = request.data.get('laptop_type')
-        
         if laptop_type not in ['my', 'company']:
             return Response(
                 {"error": "არასწორი მოწყობილობის ტიპი. გამოიყენეთ 'my' ან 'company'"}, 
