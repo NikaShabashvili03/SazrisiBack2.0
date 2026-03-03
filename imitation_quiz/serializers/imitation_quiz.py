@@ -3,6 +3,7 @@ from imitation_quiz.models.imitation_quiz import (
     ImitationQuiz, ImitationAttempt, 
     ImitationQuestion, ImitationUserAnswer
 )
+from authentication.serializers.user import UserProfileSerializer
 
 # 1. კითხვების სერიალიზატორი
 class ImitationQuestionSerializer(serializers.ModelSerializer):
@@ -43,13 +44,14 @@ class ImitationQuestionWithAnswerSerializer(serializers.ModelSerializer):
 class ImitationAttemptSerializer(serializers.ModelSerializer):
     remaining_time = serializers.SerializerMethodField()
     quiz_file = serializers.SerializerMethodField()
+    user = UserProfileSerializer()
 
     class Meta:
         model = ImitationAttempt
         fields = [
             'id', 'code', 'status', 'score', 'total_questions', 
             'correct_answers', 'percentage', 'started_at', 
-            'completed_at', 'time_taken', 'remaining_time', 'quiz_file'
+            'completed_at', 'time_taken', 'remaining_time', 'quiz_file', 'user'
         ]
 
     def get_remaining_time(self, obj):
