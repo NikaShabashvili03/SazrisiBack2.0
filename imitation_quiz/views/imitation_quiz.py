@@ -34,6 +34,13 @@ class ImitationAccessView(APIView):
 
     def post(self, request, quiz_id):
         quiz = get_object_or_404(ImitationQuiz, id=quiz_id)
+        now = timezone.now()
+        
+        if now > quiz.start_datetime:
+            return Response(
+                {"error": "დასრულებულია"}, 
+                status=status.HTTP_403_FORBIDDEN
+            )
         
         attempt, created = ImitationAttempt.objects.get_or_create(
             user=request.user,
@@ -56,6 +63,16 @@ class ImitationStartView(APIView):
     def post(self, request, code):
         attempt = get_object_or_404(ImitationAttempt, code=code)
 
+        if not attempt.imitation_quiz.is_active:
+            return Response(
+                {
+                    "details": "ქვიზი არ არის აქტიური",
+                    "start_date": attempt.imitation_quiz.start_datetime,
+                    "end_date": attempt.imitation_quiz.end_datetime
+                }, 
+                status=status.HTTP_403_FORBIDDEN
+            )
+        
         if attempt.status == 'geted_attempt':
             attempt.status = 'started'
             attempt.started_at = timezone.now()
@@ -68,6 +85,16 @@ class ImitationQuestionsView(APIView):
 
     def get(self, request, code):
         attempt = get_object_or_404(ImitationAttempt, code=code)
+        
+        if not attempt.imitation_quiz.is_active:
+            return Response(
+                {
+                    "details": "ქვიზი არ არის აქტიური",
+                    "start_date": attempt.imitation_quiz.start_datetime,
+                    "end_date": attempt.imitation_quiz.end_datetime
+                }, 
+                status=status.HTTP_403_FORBIDDEN
+            )
         
         if attempt.status == 'geted_attempt':
             return Response({"error": "ტესტი ჯერ არ არის გააქტიურებული"}, status=status.HTTP_403_FORBIDDEN)
@@ -93,6 +120,16 @@ class ImitationAnswerView(APIView):
     def post(self, request, code):
         attempt = get_object_or_404(ImitationAttempt, code=code)
 
+        if not attempt.imitation_quiz.is_active:
+            return Response(
+                {
+                    "details": "ქვიზი არ არის აქტიური",
+                    "start_date": attempt.imitation_quiz.start_datetime,
+                    "end_date": attempt.imitation_quiz.end_datetime
+                }, 
+                status=status.HTTP_403_FORBIDDEN
+            )
+            
         if attempt.status == 'geted_attempt':
             return Response({"error": "ტესტი ჯერ არ არის გააქტიურებული"}, status=status.HTTP_403_FORBIDDEN)
         
@@ -162,5 +199,11 @@ class ImitationResultView(APIView):
         if attempt.status != 'completed':
             return Response({"error": "ტესტი ჯერ არ არის დასრულებული"}, status=status.HTTP_400_BAD_REQUEST)
 
+        if timezone.now() < attempt.imitation_quiz.end_datetime:
+            return Response(
+                {"error": "doesnot active"}, 
+                status=status.HTTP_403_FORBIDDEN
+            )
+        
         serializer = ImitationQuizResultSerializer(attempt, context={'request': request})
         return Response(serializer.data)

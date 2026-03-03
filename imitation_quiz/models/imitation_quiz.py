@@ -54,6 +54,31 @@ class ImitationQuiz(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
+    start_datetime = models.DateTimeField(
+        verbose_name="Start Date and Time",
+        default=timezone.now,
+        help_text="The quiz will become accessible from this time."
+    )
+    end_datetime = models.DateTimeField(
+        verbose_name="End Date and Time",
+        default=timezone.now,
+        help_text="The quiz will close after this time."
+    )
+
+    @property
+    def is_active(self):
+        now = timezone.now()
+        return self.start_datetime <= now <= self.end_datetime
+    
+    @property
+    def status(self):
+        now = timezone.now()
+        if now < self.start_datetime:
+            return "Scheduled"
+        elif now > self.end_datetime:
+            return "Expired"
+        return "Active"
+    
     class Meta:
         ordering = ['-created_at']
     
@@ -77,7 +102,6 @@ class ImitationAttempt(models.Model):
         ('abandoned', 'Abandoned'),
     ]
     
-    # 6-ციფრიანი უნიკალური კოდი
     code = models.CharField(max_length=6, unique=True, editable=False)
 
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='imitation_attempts')
@@ -169,7 +193,6 @@ class ImitationQuestion(models.Model):
 
     def __str__(self):
         return f"{self.quiz.title} - Q{self.order}"
-
 
 class ImitationUserAnswer(models.Model):
     ANSWER_CHOICES = [
