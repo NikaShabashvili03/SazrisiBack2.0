@@ -71,12 +71,16 @@ class ImitationQuizSerializer(serializers.ModelSerializer):
     total_questions = serializers.SerializerMethodField()
     total_score = serializers.SerializerMethodField()
     attempt = serializers.SerializerMethodField()
+    is_active = serializers.ReadOnlyField()
 
     class Meta:
         model = ImitationQuiz
         fields = [
-            'id', 'title', 'description', 'category', 'time_limit', 
-            'total_questions', 'total_score', 'created_at', 'attempt', 'file'
+            'id', 'title', 'description', 'category', 'time_limit', 'location',
+            'total_questions', 'total_score', 'created_at', 'attempt', 'file',
+            'start_datetime', 'end_datetime', 'is_active',
+            'max_space', 'user_count', 'is_valid_space',
+            'available_laptops', 'registered_laptops', 'is_laptop_available'
         ]
 
     def get_total_questions(self, obj):

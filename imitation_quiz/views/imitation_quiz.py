@@ -35,16 +35,42 @@ class ImitationAccessView(APIView):
     def post(self, request, quiz_id):
         quiz = get_object_or_404(ImitationQuiz, id=quiz_id)
         now = timezone.now()
+
+        laptop_type = request.data.get('laptop_type')
         
+        laptop_type = request.data.get('laptop_type')
+        
+        if laptop_type not in ['my', 'company']:
+            return Response(
+                {"error": "არასწორი მოწყობილობის ტიპი. გამოიყენეთ 'my' ან 'company'"}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
+            
         if now > quiz.start_datetime:
             return Response(
                 {"error": "დასრულებულია"}, 
                 status=status.HTTP_403_FORBIDDEN
             )
         
+        has_attempt = ImitationAttempt.objects.filter(user=request.user, imitation_quiz=quiz).exists()
+        
+        if not has_attempt:
+            if laptop_type == 'company' and not quiz.is_laptop_available:
+                return Response(
+                    {"error": "კომპიუტერები აღარ არის ხელმისაწვდომი"}, 
+                    status=status.HTTP_403_FORBIDDEN
+                )
+        
+        if not has_attempt and not quiz.is_valid_space:
+            return Response(
+                {"error": "აღარ არის ადგილი ამ ქვიზში"}, 
+                status=status.HTTP_403_FORBIDDEN
+            )
+        
         attempt, created = ImitationAttempt.objects.get_or_create(
             user=request.user,
             imitation_quiz=quiz,
+            laptop_type=laptop_type,
             defaults={
                 'status': 'geted_attempt',
                 'total_questions': quiz.get_total_questions()

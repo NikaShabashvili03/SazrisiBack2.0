@@ -51,6 +51,8 @@ class ImitationQuiz(models.Model):
         null=False
     )
 
+    location = models.CharField(max_length=255, blank=False, null=False)
+
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -64,6 +66,26 @@ class ImitationQuiz(models.Model):
         default=timezone.now,
         help_text="The quiz will close after this time."
     )
+
+    max_space = models.IntegerField(null=False, blank=False)
+
+    available_laptops = models.IntegerField(null=False, blank=False)
+
+    @property
+    def registered_laptops(self):
+        return self.attempts.filter(laptop_type='company').count()
+
+    @property
+    def is_laptop_available(self):
+        return self.registered_laptops < self.available_laptops
+    
+    @property
+    def user_count(self):
+        return self.attempts.count()
+    
+    @property
+    def is_valid_space(self):
+        return self.user_count < self.max_space
 
     @property
     def is_active(self):
@@ -83,7 +105,6 @@ class ImitationQuiz(models.Model):
         ordering = ['-created_at']
     
     def get_total_questions(self):
-        # თუ იმიტაციას აქვს ცალკე კითხვები
         return self.questions.all().count()
 
     def get_total_score(self):
@@ -101,7 +122,18 @@ class ImitationAttempt(models.Model):
         ('completed', 'Completed'),
         ('abandoned', 'Abandoned'),
     ]
+
+    LAPTOP_TYPE = [
+        ('my', 'my'),
+        ('company', 'company')
+    ]
     
+    laptop_type = models.CharField(
+        max_length=10, 
+        choices=LAPTOP_TYPE, 
+        default='my'
+    )
+
     code = models.CharField(max_length=6, unique=True, editable=False)
 
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='imitation_attempts')
