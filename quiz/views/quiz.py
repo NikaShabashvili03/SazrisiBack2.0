@@ -225,6 +225,10 @@ class QuizResultView(APIView):
             user=request.user,
         )
 
+        if attempt.status != 'completed':
+            attempt.status = 'completed'
+            attempt.save(update_fields=['status'])
+
         serializer = QuizResultSerializer(attempt, context={'request': request})
         return Response(serializer.data)
     
