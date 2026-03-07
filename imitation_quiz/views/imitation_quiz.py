@@ -213,7 +213,24 @@ class ImitationAnswerView(APIView):
             "is_correct": user_answer.is_correct,
             "selected": user_answer.selected_answer
         })
-    
+
+class CompleteAttemptView(APIView):
+    permission_classes = [AllowAny]
+
+    def post(self, request, code):
+        attempt = get_object_or_404(ImitationAttempt, code=code)
+        
+        if attempt.status in ['in_progress', 'started']:
+            attempt.status = "completed"
+            attempt.save(update_fields=['status'])
+            return Response({"details": "ქვიზი წარმატებით დასრულდა"})
+
+        return Response(
+            {"details": f"Attempt cannot be completed. Current status: {attempt.status}"}, 
+            status=400
+        )
+
+
 class ImitationResultView(APIView):
     permission_classes = [IsAuthenticated]
 

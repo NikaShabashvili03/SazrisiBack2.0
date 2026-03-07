@@ -9,6 +9,9 @@ urlpatterns = [
 
     path('attempts/<code>/start/', 
          imitation_quiz.ImitationStartView.as_view(), name='imitation-start'),
+     
+    path('attempts/<code>/complete/', 
+         imitation_quiz.CompleteAttemptView.as_view(), name='imitation-complete'),
 
     path('attempts/<code>/questions/', 
          imitation_quiz.ImitationQuestionsView.as_view(), name='imitation-questions'),
