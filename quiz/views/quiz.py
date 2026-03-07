@@ -223,7 +223,6 @@ class QuizResultView(APIView):
             QuizAttempt, 
             id=attempt_id, 
             user=request.user,
-            status='completed'
         )
 
         serializer = QuizResultSerializer(attempt, context={'request': request})

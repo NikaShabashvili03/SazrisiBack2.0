@@ -135,3 +135,6 @@ class UserProfileSerializer(serializers.ModelSerializer):
     class Meta:
         model = User 
         fields = ['id', 'firstname', 'avatar', 'preferences', 'lastname', 'email', 'email_verified']
+
+class VerifyEmailSerializer(serializers.Serializer):
+    code = serializers.CharField(max_length=6, min_length=6)

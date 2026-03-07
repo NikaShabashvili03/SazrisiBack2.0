@@ -2,6 +2,9 @@ from django.db import models
 from django.contrib.auth.models import AbstractBaseUser
 from core.utils import image_upload, validate_image
 from django.core.exceptions import ValidationError
+import random
+from datetime import timedelta
+from django.utils.timezone import now
 
 def upload_image(instance, filename):
     return image_upload(instance, filename, 'avatars/')
@@ -52,3 +55,28 @@ class Preferences(models.Model):
 
     def __str__(self):
         return f"{self.user.firstname} {self.user.lastname} | {self.theme_color}"
+    
+class VerificationCode(models.Model):
+    user = models.OneToOneField(User, on_delete=models.CASCADE, related_name="verification_code")
+    code = models.CharField(max_length=6)
+    created_at = models.DateTimeField(auto_now_add=True)
+    last_sent_at = models.DateTimeField(auto_now=True)
+    attempts_count = models.PositiveIntegerField(default=0)
+    last_attempt_at = models.DateTimeField(null=True, blank=True)
+
+    def is_valid(self):
+        return now() < self.created_at + timedelta(minutes=15)
+
+    def can_resend(self):
+        return now() > self.last_sent_at + timedelta(seconds=60)
+
+    def reset_if_new_day(self):
+        if self.last_attempt_at and self.last_attempt_at.date() < now().date():
+            self.attempts_count = 0
+            self.save()
+
+    def generate_code(self):
+        self.code = str(random.randint(100000, 999999))
+        self.created_at = now()
+        self.last_sent_at = now()
+        self.save()

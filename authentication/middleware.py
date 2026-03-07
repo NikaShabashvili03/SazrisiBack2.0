@@ -11,12 +11,24 @@ class CustomSessionAuthentication(BaseAuthentication):
             return None
 
         try:
-            session = UserSession.objects.get(session_token=session_token)
+            session = UserSession.objects.select_related('user').get(session_token=session_token)
         except UserSession.DoesNotExist:
-            raise AuthenticationFailed('Invalid session token')
+            raise AuthenticationFailed('სესია არასწორია!')
 
-        if session.expires_at > timezone.now():
-            return (session.user, None)
-        else:
+        if session.expires_at < timezone.now():
             session.delete()
-            raise AuthenticationFailed('Session expired')
+            raise AuthenticationFailed('სესიას გაუვიდა ვადა!')
+
+        # allowed_paths = [
+        #     '/api/v1/user/verify-email/', 
+        #     '/api/v1/user/resend-code/',
+        #     '/api/v1/user/logout/'
+        # ]
+        
+        # if not session.user.email_verified and request.path not in allowed_paths:
+        #     raise AuthenticationFailed({
+        #         "detail": "გთხოვთ, ჯერ გაიაროთ მეილის ვერიფიკაცია!",
+        #         "needs_verification": True
+        #     })
+
+        return (session.user, None)
