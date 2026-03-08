@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import User, Payment, Avatar, Preferences
+from .models import User, Payment, Avatar, Preferences, VerificationCode
 
 class AvatarInline(admin.StackedInline):
     model = Avatar
@@ -15,3 +15,4 @@ class UserAdmin(admin.ModelAdmin):
     list_display = ('firstname', 'lastname', 'email', 'phone', 'phone_verified', 'last_login')
 
 admin.site.register(Payment)
+admin.site.register(VerificationCode)

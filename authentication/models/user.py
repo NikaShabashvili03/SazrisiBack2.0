@@ -61,16 +61,20 @@ class VerificationCode(models.Model):
     phone = models.CharField(max_length=20, unique=True)
     code = models.CharField(max_length=6)
     created_at = models.DateTimeField(auto_now_add=True)
-    last_sent_at = models.DateTimeField(auto_now=True)
+    last_sent_at = models.DateTimeField(null=True, blank=True)
     attempts_count = models.PositiveIntegerField(default=0)
 
     def is_valid(self):
         return now() < self.created_at + timedelta(minutes=15)
 
     def can_resend(self):
+        if self.last_sent_at is None:
+            return True
+        
         return now() > self.last_sent_at + timedelta(seconds=60)
 
     def generate_code(self):
         self.code = str(random.randint(100000, 999999))
+        self.last_sent_at = now()
         self.created_at = now()
         self.save()

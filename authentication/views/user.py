@@ -10,6 +10,8 @@ from rest_framework.permissions import AllowAny, IsAuthenticated
 from django.utils.timezone import now
 from ..utils import get_client_ip
 from rest_framework.views import APIView
+import requests
+import json
 
 class AvatarView(generics.GenericAPIView):
     permission_classes = [IsAuthenticated]
@@ -45,6 +47,26 @@ class RegisterSendCodeView(APIView):
     permission_classes = [AllowAny]
     authentication_classes = []
 
+    def send_ubill_sms(self, phone, code):
+        url = "https://api.ubill.dev/v1/sms/send"
+        headers = {
+            'key': 'aebed5135d1d42b8845044dad368b056e519c0a1', 
+            'Content-Type': 'application/json'
+        }
+        payload = {
+            "brandID": 1,
+            "numbers": [int(phone)],
+            "text": f"თქვენი ვერიფიკაციის კოდია: {code}",
+            "stopList": False
+        }
+        
+        try:
+            response = requests.post(url, headers=headers, json=payload, timeout=5)
+            return response.status_code == 200
+        except Exception as e:
+            print(f"SMS Error: {e}")
+            return False
+        
     def post(self, request):
         phone = request.data.get('phone')
         if not phone:
@@ -55,13 +77,16 @@ class RegisterSendCodeView(APIView):
 
         verification, created = VerificationCode.objects.get_or_create(phone=phone)
         
-        # if not verification.can_resend():
-        #     return Response({"detail": "დაიცადეთ 60 წამი."}, status=429)
+        if not verification.can_resend():
+            return Response({"detail": "დაიცადეთ 60 წამი."}, status=429)
 
         verification.generate_code()
-        print(f"DEBUG: Code for {phone} is {verification.code}")
+        sms_success = self.send_ubill_sms(phone, verification.code)
         
-        return Response({"detail": "კოდი გამოგზავნილია."}, status=200)
+        if sms_success:
+            return Response({"detail": "კოდი გამოგზავნილია."}, status=200)
+        else:
+            return Response({"detail": "ვერ მოხერხდა SMS-ის გაგზავნა."}, status=500)
 
 class UserRegisterView(generics.GenericAPIView):
     serializer_class = UserRegisterSerializer
