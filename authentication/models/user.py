@@ -13,14 +13,15 @@ def upload_image(instance, filename):
 class User(AbstractBaseUser):
     firstname = models.CharField(max_length=255)
     lastname = models.CharField(max_length=255)
-    email = models.EmailField(unique=True)
-    email_verified = models.DateTimeField(null=True, blank=True)
-
+    email = models.EmailField(unique=True) 
+    phone = models.CharField(max_length=20, unique=True)
+    phone_verified = models.DateTimeField(null=True, blank=True)
+    
     last_login = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
-    USERNAME_FIELD = 'email'
-    REQUIRED_FIELDS = ['firstname', 'lastname']
+    USERNAME_FIELD = 'phone' 
+    REQUIRED_FIELDS = ['firstname', 'lastname', 'email']
 
     def save(self, *args, **kwargs):
         self.firstname = self.firstname.capitalize()
@@ -57,12 +58,11 @@ class Preferences(models.Model):
         return f"{self.user.firstname} {self.user.lastname} | {self.theme_color}"
     
 class VerificationCode(models.Model):
-    user = models.OneToOneField(User, on_delete=models.CASCADE, related_name="verification_code")
+    phone = models.CharField(max_length=20, unique=True)
     code = models.CharField(max_length=6)
     created_at = models.DateTimeField(auto_now_add=True)
     last_sent_at = models.DateTimeField(auto_now=True)
     attempts_count = models.PositiveIntegerField(default=0)
-    last_attempt_at = models.DateTimeField(null=True, blank=True)
 
     def is_valid(self):
         return now() < self.created_at + timedelta(minutes=15)
@@ -70,13 +70,7 @@ class VerificationCode(models.Model):
     def can_resend(self):
         return now() > self.last_sent_at + timedelta(seconds=60)
 
-    def reset_if_new_day(self):
-        if self.last_attempt_at and self.last_attempt_at.date() < now().date():
-            self.attempts_count = 0
-            self.save()
-
     def generate_code(self):
         self.code = str(random.randint(100000, 999999))
         self.created_at = now()
-        self.last_sent_at = now()
         self.save()

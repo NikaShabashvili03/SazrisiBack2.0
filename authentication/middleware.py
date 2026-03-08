@@ -19,16 +19,7 @@ class CustomSessionAuthentication(BaseAuthentication):
             session.delete()
             raise AuthenticationFailed('სესიას გაუვიდა ვადა!')
 
-        # allowed_paths = [
-        #     '/api/v1/user/verify-email/', 
-        #     '/api/v1/user/resend-code/',
-        #     '/api/v1/user/logout/'
-        # ]
-        
-        # if not session.user.email_verified and request.path not in allowed_paths:
-        #     raise AuthenticationFailed({
-        #         "detail": "გთხოვთ, ჯერ გაიაროთ მეილის ვერიფიკაცია!",
-        #         "needs_verification": True
-        #     })
+        if not session.user.phone_verified:
+             raise AuthenticationFailed({"detail": "საჭიროა ტელეფონის ვერიფიკაცია!", "needs_verification": True})
 
         return (session.user, None)

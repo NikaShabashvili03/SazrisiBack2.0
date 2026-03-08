@@ -1,6 +1,6 @@
 from rest_framework import generics, status
 from rest_framework.response import Response
-from ..serializers.user import UserLoginSerializer, UserProfileSerializer, UserRegisterSerializer, UserChangePasswordSerializer, AvatarUploadSerializer, AvatarSerializer, PreferencesCreateSerializer, PreferencesSerializer, VerifyEmailSerializer
+from ..serializers.user import UserLoginSerializer, UserProfileSerializer, UserRegisterSerializer, UserChangePasswordSerializer, AvatarUploadSerializer, AvatarSerializer, PreferencesCreateSerializer, PreferencesSerializer
 from ..models import UserSession, User, VerificationCode
 from django.middleware.csrf import get_token
 import uuid
@@ -41,6 +41,28 @@ class PreferencesView(generics.GenericAPIView):
 
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
     
+class RegisterSendCodeView(APIView):
+    permission_classes = [AllowAny]
+    authentication_classes = []
+
+    def post(self, request):
+        phone = request.data.get('phone')
+        if not phone:
+            return Response({"detail": "ნომერი აუცილებელია."}, status=400)
+
+        if User.objects.filter(phone=phone).exists():
+            return Response({"detail": "ეს ნომერი უკვე დაკავებულია."}, status=400)
+
+        verification, created = VerificationCode.objects.get_or_create(phone=phone)
+        
+        # if not verification.can_resend():
+        #     return Response({"detail": "დაიცადეთ 60 წამი."}, status=429)
+
+        verification.generate_code()
+        print(f"DEBUG: Code for {phone} is {verification.code}")
+        
+        return Response({"detail": "კოდი გამოგზავნილია."}, status=200)
+
 class UserRegisterView(generics.GenericAPIView):
     serializer_class = UserRegisterSerializer
     permission_classes = [AllowAny]
@@ -49,38 +71,17 @@ class UserRegisterView(generics.GenericAPIView):
     def post(self, request, *args, **kwargs):
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-
         new_user = serializer.save()
-
-        verification = VerificationCode.objects.create(user=new_user)
-        verification.generate_code()
-        
-        print(f"DEBUG: Code for {new_user.email} is {verification.code}")
 
         token = str(uuid.uuid4())
         expires_at = now() + timedelta(days=2)
-
         session = UserSession.objects.create(
-            user=new_user,
-            session_token=token,
-            ip=get_client_ip(request),
-            expires_at=expires_at,
+            user=new_user, session_token=token, 
+            ip=get_client_ip(request), expires_at=expires_at
         )
 
-        user_data = UserProfileSerializer(new_user).data
-
-        response = Response(user_data, status=status.HTTP_201_CREATED)
-        response.set_cookie(
-            'session_token',
-            session.session_token,
-            expires=expires_at,
-            httponly=False,
-            secure=True, 
-            samesite='None' 
-        )
-        csrf_token = get_token(request)
-        response['X-CSRFToken'] = csrf_token
-
+        response = Response(UserProfileSerializer(new_user).data, status=status.HTTP_201_CREATED)
+        response.set_cookie('session_token', session.session_token, expires=expires_at, httponly=False, secure=True, samesite='None')
         return response
 
 class UserLoginView(generics.GenericAPIView):
@@ -167,75 +168,3 @@ class UserChangePassword(APIView):
             serializer.save()
             return Response({"detail": "პაროლი განახლდა წარმატებით."}, status=status.HTTP_200_OK)
         return Response({"detail": serializer.errors}, status=status.HTTP_400_BAD_REQUEST)
-    
-
-class VerifyEmailView(APIView):
-    permission_classes = [IsAuthenticated]
-
-    def post(self, request):
-        user = request.user
-        
-        # Check if already verified
-        if user.email_verified:
-            return Response({"detail": "ემაილი უკვე ვერიფიცირებულია."}, status=status.HTTP_400_BAD_REQUEST)
-
-        try:
-            verification = user.verification_code
-        except VerificationCode.DoesNotExist:
-            return Response({"detail": "ვერიფიკაციის ჩანაწერი ვერ მოიძებნა."}, status=status.HTTP_404_NOT_FOUND)
-
-        # 1. Reset attempt count if it's a new calendar day
-        verification.reset_if_new_day()
-
-        # 2. Check if daily limit (3 attempts) is exceeded
-        if verification.attempts_count >= 3:
-            return Response(
-                {"detail": "დღიური ლიმიტი (3 მცდელობა) ამოწურულია. სცადეთ ხვალ."}, 
-                status=status.HTTP_429_TOO_MANY_REQUESTS
-            )
-
-        serializer = VerifyEmailSerializer(data=request.data)
-        if serializer.is_valid():
-            incoming_code = serializer.validated_data['code']
-
-            # 3. Check if code is correct and not expired
-            if verification.is_valid() and verification.code == incoming_code:
-                user.email_verified = now()
-                user.save()
-                verification.delete() # Clean up after success
-                return Response({"detail": "ემაილი წარმატებით ვერიფიცირდა!"}, status=status.HTTP_200_OK)
-
-        # 4. Handle failure: Increment attempt counter
-        verification.attempts_count += 1
-        verification.last_attempt_at = now()
-        verification.save()
-
-        remaining = 3 - verification.attempts_count
-        return Response({
-            "detail": f"კოდი არასწორია. დაგრჩათ {remaining} მცდელობა."
-        }, status=status.HTTP_400_BAD_REQUEST)
-
-
-class ResendVerificationView(APIView):
-    permission_classes = [IsAuthenticated]
-
-    def post(self, request):
-        user = request.user
-        
-        if user.email_verified:
-            return Response({"detail": "ემაილი უკვე ვერიფიცირებულია."}, status=status.HTTP_400_BAD_REQUEST)
-
-        verification, created = VerificationCode.objects.get_or_create(user=user)
-
-        verification.reset_if_new_day()
-        if verification.attempts_count >= 3:
-            return Response({"detail": "ლიმიტი ამოწურულია. სცადეთ ხვალ."}, status=status.HTTP_429_TOO_MANY_REQUESTS)
-
-        if not created and not verification.can_resend():
-            return Response({"detail": f"გთხოვთ დაიცადოთ 60 წამი."}, status=status.HTTP_429_TOO_MANY_REQUESTS)
-
-        verification.generate_code()
-        
-        print(f"DEBUG: New code sent: {verification.code}")
-
-        return Response({"detail": "ახალი კოდი გამოგზავნილია მეილზე."}, status=status.HTTP_200_OK)

@@ -1,10 +1,12 @@
 from rest_framework import serializers
-from ..models import User, Avatar, Preferences
+from ..models import User, Avatar, Preferences, VerificationCode
 from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError
 from django.contrib.auth.hashers import check_password
 from django.contrib.auth.password_validation import validate_password as django_validate_password
 import re
+from django.db.models import Q
+from django.utils.timezone import now
 
 def custom_password_validator(value):
     if len(value) < 8:
@@ -41,50 +43,65 @@ class UserChangePasswordSerializer(serializers.Serializer):
         return user
     
 class UserRegisterSerializer(serializers.Serializer):
+    firstname = serializers.CharField()
+    lastname = serializers.CharField()
     email = serializers.EmailField()
+    phone = serializers.CharField()
     password = serializers.CharField(write_only=True)
-    firstname = serializers.CharField(write_only=True)
-    lastname = serializers.CharField(write_only=True)
     rePassword = serializers.CharField(write_only=True)
+    verification_code = serializers.CharField(write_only=True)
 
-    def validate_email(self, email):
-        if User.objects.filter(email=email).exists():
-            raise serializers.ValidationError("მომხმარებელი ამ ემაილით უკვე არსებობს!")
-        return email
-    
     def validate(self, attrs):
+        if User.objects.filter(email=attrs['email']).exists():
+            raise serializers.ValidationError({"email": "ემაილი უკვე დაკავებულია."})
+        if User.objects.filter(phone=attrs['phone']).exists():
+            raise serializers.ValidationError({"phone": "ტელეფონის ნომერი უკვე დაკავებულია."})
+        
         if attrs['password'] != attrs['rePassword']:
             raise serializers.ValidationError({"rePassword": "პაროლები არ ემთხვევა."})
+
         try:
-            custom_password_validator(attrs['password'])
-        except ValidationError as e:
-            raise serializers.ValidationError({"password": e.messages})
+            v_record = VerificationCode.objects.get(phone=attrs['phone'])
+            if not v_record.is_valid():
+                raise serializers.ValidationError({"verification_code": "კოდს გაუვიდა ვადა."})
+            
+            if v_record.code != attrs['verification_code']:
+                v_record.attempts_count += 1
+                v_record.save()
+                raise serializers.ValidationError({"verification_code": "კოდი არასწორია."})
+        except VerificationCode.DoesNotExist:
+            raise serializers.ValidationError({"verification_code": "ვერიფიკაციის კოდი არ მოიძებნა."})
 
         return attrs
 
     def create(self, validated_data):
         validated_data.pop('rePassword')
-        user = User.objects.create(
-            email=validated_data['email'],
-            password=validated_data['password'],
-            firstname=validated_data['firstname'],
-            lastname=validated_data['lastname'],
-        )
+        code = validated_data.pop('verification_code')
+      
+        user = User.objects.create(**validated_data)
+        user.phone_verified = now()
+        user.save()
+        
+        VerificationCode.objects.filter(phone=user.phone).delete()
         return user
     
 class UserLoginSerializer(serializers.Serializer):
-    email = serializers.EmailField()
+    login_id = serializers.CharField() 
     password = serializers.CharField(write_only=True)
     
     def validate(self, data):
+        login_id = data.get('login_id')
+        password = data.get('password')
+
         try:
-            user = User.objects.get(email=data['email'])
-            if user.check_password(data['password']):
+            user = User.objects.get(Q(email=login_id) | Q(phone=login_id))
+            
+            if user.check_password(password):
                 return user
-            else:
-                raise serializers.ValidationError("არასწორი ემაილი ან პაროლი!")
+            raise serializers.ValidationError("არასწორი პაროლი!")
+            
         except User.DoesNotExist:
-            raise serializers.ValidationError("მომხმარებელი ვერ მოიძებნა!")
+            raise serializers.ValidationError("მომხმარებელი ამ მონაცემებით ვერ მოიძებნა!")
 
 class AvatarUploadSerializer(serializers.ModelSerializer):
     image = serializers.ImageField(write_only=True, required=True)
@@ -134,7 +151,4 @@ class UserProfileSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = User 
-        fields = ['id', 'firstname', 'avatar', 'preferences', 'lastname', 'email', 'email_verified']
-
-class VerifyEmailSerializer(serializers.Serializer):
-    code = serializers.CharField(max_length=6, min_length=6)
+        fields = ['id', 'firstname', 'lastname', 'email', 'phone', 'phone_verified', 'avatar', 'preferences']

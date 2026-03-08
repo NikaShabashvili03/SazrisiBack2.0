@@ -12,6 +12,6 @@ class PreferencesInline(admin.StackedInline):
 @admin.register(User)
 class UserAdmin(admin.ModelAdmin):
     inlines = [AvatarInline, PreferencesInline]
-    list_display = ('firstname', 'lastname', 'email', 'email_verified', 'last_login')
+    list_display = ('firstname', 'lastname', 'email', 'phone', 'phone_verified', 'last_login')
 
 admin.site.register(Payment)
