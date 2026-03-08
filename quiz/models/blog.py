@@ -1,11 +1,11 @@
 from django.db import models
 from django.utils import timezone
 from datetime import timedelta
-
+from ckeditor_uploader.fields import RichTextUploadingField
 
 class Blog(models.Model):
     title = models.CharField(max_length=255)
-    description = models.TextField(blank=True, null=True)
+    description = RichTextUploadingField(blank=True, null=True)
 
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)

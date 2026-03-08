@@ -58,4 +58,23 @@ class UserAnswerAdmin(admin.ModelAdmin):
     readonly_fields = ['answered_at']
 
 
-admin.site.register(Blog)
+class BlogAdminForm(forms.ModelForm):
+
+    class Meta:
+        model = Blog
+        fields = '__all__'
+
+@admin.register(Blog)
+class BlogAdmin(admin.ModelAdmin):
+    form = BlogAdminForm
+
+    class Media:
+        css = {
+            'all': [
+                'https://unpkg.com/mathlive/dist/mathlive.core.css',
+                'https://unpkg.com/mathlive/dist/mathlive.css',
+            ]
+        }
+        js = [
+            'https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js',
+        ]
