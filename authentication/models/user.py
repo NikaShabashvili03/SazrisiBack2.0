@@ -16,7 +16,6 @@ class User(AbstractBaseUser):
     email = models.EmailField(unique=True) 
     phone = models.CharField(max_length=20, unique=True)
     phone_verified = models.DateTimeField(null=True, blank=True)
-    hello = models.CharField(max_length=255, blank=True, null=True)
     
     last_login = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
