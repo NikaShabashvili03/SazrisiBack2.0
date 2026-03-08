@@ -9,7 +9,8 @@ class UserSession(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     expires_at = models.DateTimeField()
     ip = models.GenericIPAddressField(null=True, blank=True)
-    
+    hello = models.CharField(max_length=255, blank=True, null=True)
+
     class Meta:
           verbose_name = _("Session")
           verbose_name_plural = _("Sessions")
