@@ -18,7 +18,8 @@ from ..serializers.imitation_quiz import (
     ImitationAttemptSerializer, 
     ImitationQuestionSerializer, 
     ImitationQuizResultSerializer, 
-    ImitationQuestionWithAnswerSerializer
+    ImitationQuestionWithAnswerSerializer,
+    CompletedImitationQuizSerializer
 )
 
 class ImitationQuizListView(APIView):
@@ -29,6 +30,26 @@ class ImitationQuizListView(APIView):
         serializer = ImitationQuizSerializer(quizzes, many=True, context={'request': request})
         return Response(serializer.data)
 
+class CompletedImitationQuizList(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        attempts = (
+            ImitationAttempt.objects
+            .filter(user=request.user, status="completed")
+            .select_related("imitation_quiz")
+        )
+
+        quizzes = [a.imitation_quiz for a in attempts]
+
+        return Response(
+            CompletedImitationQuizSerializer(
+                quizzes,
+                many=True,
+                context={"request": request}
+            ).data
+        )
+    
 class ImitationAccessView(APIView):
     permission_classes = [IsAuthenticated]
 

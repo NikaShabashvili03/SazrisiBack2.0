@@ -21,4 +21,7 @@ urlpatterns = [
     
     path('attempts/<code>/result/', 
          imitation_quiz.ImitationResultView.as_view(), name='imitation-result'),
+
+     path('attempts/completed/list/', 
+          imitation_quiz.CompletedImitationQuizList.as_view(), name='imitation-list')
 ]

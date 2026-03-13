@@ -98,6 +98,36 @@ class ImitationQuizSerializer(serializers.ModelSerializer):
                 return ImitationAttemptSerializer(attempt, context={'request': request}).data
         return None
 
+class CompletedImitationQuizSerializer(serializers.ModelSerializer):
+    total_questions = serializers.SerializerMethodField()
+    total_score = serializers.SerializerMethodField()
+    attempt = serializers.SerializerMethodField()
+    is_active = serializers.ReadOnlyField()
+
+    class Meta:
+        model = ImitationQuiz
+        fields = [
+            'id', 'title', 'description', 'category', 'time_limit', 'location',
+            'total_questions', 'total_score', 'created_at', 'attempt', 'file',
+            'start_datetime', 'end_datetime', 'is_active',
+            'max_space', 'user_count', 'is_valid_space',
+            'available_laptops', 'registered_laptops', 'is_laptop_available'
+        ]
+
+    def get_total_questions(self, obj):
+        return obj.get_total_questions()
+
+    def get_total_score(self, obj):
+        return obj.get_total_score()
+
+    def get_attempt(self, obj):
+        request = self.context.get('request')
+        if request and request.user.is_authenticated:
+            attempt = obj.attempts.filter(user=request.user).order_by('-started_at').first()
+            if attempt:
+                return ImitationAttemptSerializer(attempt, context={'request': request}).data
+        return None
+    
 # 6. შედეგების სერიალიზატორი (Result View)
 class ImitationQuizResultSerializer(serializers.ModelSerializer):
     questions = serializers.SerializerMethodField()
