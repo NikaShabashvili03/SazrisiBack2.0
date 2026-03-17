@@ -68,30 +68,35 @@ class VerificationCode(models.Model):
 
     phone = models.CharField(max_length=20)
     code = models.CharField(max_length=6)
-
-    purpose = models.CharField(
-        max_length=20,
-        choices=PURPOSE_CHOICES
-    )
+    purpose = models.CharField(max_length=20, choices=PURPOSE_CHOICES)
 
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     expires_at = models.DateTimeField(null=True, blank=True)
+    last_sent_at = models.DateTimeField(null=True, blank=True)
     is_used = models.BooleanField(default=False)
 
     class Meta:
         unique_together = ("phone", "purpose")
 
     def generate_code(self):
+        current_time = now()
         self.code = str(random.randint(100000, 999999))
         self.is_used = False
-        self.expires_at = now() + timedelta(minutes=10)
-        self.save(update_fields=["code", "is_used", "expires_at", "updated_at"])
+        self.expires_at = current_time + timedelta(minutes=10)
+        self.last_sent_at = current_time
+        self.save(update_fields=[
+            "code",
+            "is_used",
+            "expires_at",
+            "last_sent_at",
+            "updated_at",
+        ])
 
     def can_resend(self):
-        if not self.updated_at:
+        if not self.last_sent_at:
             return True
-        return now() >= self.updated_at + timedelta(seconds=60)
+        return now() >= self.last_sent_at + timedelta(seconds=60)
 
     def is_valid(self, code: str):
         return (
