@@ -58,23 +58,52 @@ class Preferences(models.Model):
         return f"{self.user.firstname} {self.user.lastname} | {self.theme_color}"
     
 class VerificationCode(models.Model):
-    phone = models.CharField(max_length=20, unique=True)
+    PURPOSE_REGISTER = "register"
+    PURPOSE_RESET = "reset"
+
+    PURPOSE_CHOICES = (
+        (PURPOSE_REGISTER, "Register"),
+        (PURPOSE_RESET, "Reset Password"),
+    )
+
+    phone = models.CharField(max_length=20)
     code = models.CharField(max_length=6)
+
+    purpose = models.CharField(
+        max_length=20,
+        choices=PURPOSE_CHOICES,
+        default=PURPOSE_REGISTER
+    )
+
     created_at = models.DateTimeField(auto_now_add=True)
-    last_sent_at = models.DateTimeField(null=True, blank=True)
-    attempts_count = models.PositiveIntegerField(default=0)
+    expires_at = models.DateTimeField(null=True, blank=True)
+    is_used = models.BooleanField(default=False)
 
-    def is_valid(self):
-        return now() < self.created_at + timedelta(minutes=15)
-
-    def can_resend(self):
-        if self.last_sent_at is None:
-            return True
-        
-        return now() > self.last_sent_at + timedelta(seconds=60)
+    class Meta:
+        unique_together = ("phone", "purpose")
 
     def generate_code(self):
         self.code = str(random.randint(100000, 999999))
-        self.last_sent_at = now()
-        self.created_at = now()
-        self.save()
+        self.is_used = False
+        self.expires_at = now() + timedelta(minutes=10)
+        self.save(update_fields=["code", "is_used", "expires_at", "updated_at"])
+
+    def can_resend(self):
+        if not self.updated_at:
+            return True
+        return now() >= self.updated_at + timedelta(seconds=60)
+
+    def is_valid(self, code: str):
+        return (
+            not self.is_used
+            and self.code == str(code)
+            and self.expires_at is not None
+            and self.expires_at >= now()
+        )
+
+    def mark_used(self):
+        self.is_used = True
+        self.save(update_fields=["is_used", "updated_at"])
+
+    def __str__(self):
+        return f"{self.phone} - {self.purpose}"
