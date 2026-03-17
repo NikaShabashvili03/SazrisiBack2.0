@@ -58,57 +58,23 @@ class Preferences(models.Model):
         return f"{self.user.firstname} {self.user.lastname} | {self.theme_color}"
     
 class VerificationCode(models.Model):
-    PURPOSE_REGISTER = "register"
-    PURPOSE_RESET = "reset"
-
-    PURPOSE_CHOICES = (
-        (PURPOSE_REGISTER, "Register"),
-        (PURPOSE_RESET, "Reset Password"),
-    )
-
-    phone = models.CharField(max_length=20)
+    phone = models.CharField(max_length=20, unique=True)
     code = models.CharField(max_length=6)
-    purpose = models.CharField(max_length=20, choices=PURPOSE_CHOICES)
-
     created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
-    expires_at = models.DateTimeField(null=True, blank=True)
     last_sent_at = models.DateTimeField(null=True, blank=True)
-    is_used = models.BooleanField(default=False)
+    attempts_count = models.PositiveIntegerField(default=0)
 
-    class Meta:
-        unique_together = ("phone", "purpose")
-
-    def generate_code(self):
-        current_time = now()
-        self.code = str(random.randint(100000, 999999))
-        self.is_used = False
-        self.expires_at = current_time + timedelta(minutes=10)
-        self.last_sent_at = current_time
-        self.save(update_fields=[
-            "code",
-            "is_used",
-            "expires_at",
-            "last_sent_at",
-            "updated_at",
-        ])
+    def is_valid(self):
+        return now() < self.created_at + timedelta(minutes=15)
 
     def can_resend(self):
-        if not self.last_sent_at:
+        if self.last_sent_at is None:
             return True
-        return now() >= self.last_sent_at + timedelta(seconds=60)
+        
+        return now() > self.last_sent_at + timedelta(seconds=60)
 
-    def is_valid(self, code: str):
-        return (
-            not self.is_used
-            and self.code == str(code)
-            and self.expires_at is not None
-            and self.expires_at >= now()
-        )
-
-    def mark_used(self):
-        self.is_used = True
-        self.save(update_fields=["is_used", "updated_at"])
-
-    def __str__(self):
-        return f"{self.phone} - {self.purpose}"
+    def generate_code(self):
+        self.code = str(random.randint(100000, 999999))
+        self.last_sent_at = now()
+        self.created_at = now()
+        self.save()
