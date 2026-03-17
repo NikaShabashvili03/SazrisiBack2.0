@@ -56,7 +56,7 @@ class RegisterSendCodeView(APIView):
     def send_ubill_sms(self, phone, code):
         url = "https://api.ubill.dev/v1/sms/send"
         headers = {
-            'key': settings.UBILL_API_KEY,
+            'key': 'aebed5135d1d42b8845044dad368b056e519c0a1',
             'Content-Type': 'application/json'
         }
         payload = {
@@ -234,7 +234,7 @@ class PasswordResetSendCodeView(APIView):
     def send_ubill_sms(self, phone, code):
         url = "https://api.ubill.dev/v1/sms/send"
         headers = {
-            'key': settings.UBILL_API_KEY,
+            'key': 'aebed5135d1d42b8845044dad368b056e519c0a1',
             'Content-Type': 'application/json'
         }
         payload = {
