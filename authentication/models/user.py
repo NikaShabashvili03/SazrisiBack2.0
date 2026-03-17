@@ -71,11 +71,11 @@ class VerificationCode(models.Model):
 
     purpose = models.CharField(
         max_length=20,
-        choices=PURPOSE_CHOICES,
-        default=PURPOSE_REGISTER
+        choices=PURPOSE_CHOICES
     )
 
     created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
     expires_at = models.DateTimeField(null=True, blank=True)
     is_used = models.BooleanField(default=False)
 
