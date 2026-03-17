@@ -2,9 +2,9 @@ from rest_framework import serializers
 from ..models import User, Avatar, Preferences, VerificationCode
 from django.core.exceptions import ValidationError
 from django.contrib.auth.hashers import check_password
-import re
 from django.db.models import Q
 from django.utils.timezone import now
+import re
 
 
 def custom_password_validator(value):
@@ -15,7 +15,7 @@ def custom_password_validator(value):
     if not re.search(r"[A-Za-z]", value):
         raise ValidationError("პაროლი უნდა შეიცავდეს მინიმუმ ერთ ასოს.")
     if not re.search(r"[^A-Za-z0-9]", value):
-        raise ValidationError("პაროლი უნდა შეიცავდეს მინიმუმ ერთ სპეციალურ სიმბოლოს ( მაგალითად: !@#$%^&* ).")
+        raise ValidationError("პაროლი უნდა შეიცავდეს მინიმუმ ერთ სპეციალურ სიმბოლოს (მაგალითად: !@#$%^&*).")
 
 
 class UserChangePasswordSerializer(serializers.Serializer):
@@ -38,7 +38,7 @@ class UserChangePasswordSerializer(serializers.Serializer):
     def save(self, **kwargs):
         user = self.context['request'].user
         user.set_password(self.validated_data['new_password'])
-        user.save()
+        user.save(update_fields=["password"])
         return user
 
 
@@ -52,49 +52,57 @@ class UserRegisterSerializer(serializers.Serializer):
     verification_code = serializers.CharField(write_only=True)
 
     def validate(self, attrs):
-        if User.objects.filter(email=attrs['email']).exists():
+        phone = attrs['phone']
+        email = attrs['email']
+        password = attrs['password']
+        re_password = attrs['rePassword']
+        verification_code = attrs['verification_code']
+
+        if User.objects.filter(email=email).exists():
             raise serializers.ValidationError({"email": "ემაილი უკვე დაკავებულია."})
 
-        if User.objects.filter(phone=attrs['phone']).exists():
+        if User.objects.filter(phone=phone).exists():
             raise serializers.ValidationError({"phone": "ტელეფონის ნომერი უკვე დაკავებულია."})
 
-        if attrs['password'] != attrs['rePassword']:
+        if password != re_password:
             raise serializers.ValidationError({"rePassword": "პაროლები არ ემთხვევა."})
 
         try:
-            custom_password_validator(attrs['password'])
+            custom_password_validator(password)
         except ValidationError as e:
             raise serializers.ValidationError({"password": e.messages})
 
         try:
-            v_record = VerificationCode.objects.get(phone=attrs['phone'])
-
-            if not v_record.is_valid():
-                raise serializers.ValidationError({"verification_code": "კოდს გაუვიდა ვადა."})
-
-            if v_record.code != attrs['verification_code']:
-                if hasattr(v_record, "attempts_count"):
-                    v_record.attempts_count += 1
-                    v_record.save(update_fields=["attempts_count"])
-                raise serializers.ValidationError({"verification_code": "კოდი არასწორია."})
-
+            v_record = VerificationCode.objects.get(
+                phone=phone,
+                purpose=VerificationCode.PURPOSE_REGISTER,
+            )
         except VerificationCode.DoesNotExist:
             raise serializers.ValidationError({"verification_code": "ვერიფიკაციის კოდი არ მოიძებნა."})
 
+        if not v_record.expires_at or v_record.expires_at < now():
+            raise serializers.ValidationError({"verification_code": "კოდს გაუვიდა ვადა."})
+
+        if not v_record.is_valid(verification_code):
+            raise serializers.ValidationError({"verification_code": "კოდი არასწორია."})
+
+        attrs["verification_obj"] = v_record
         return attrs
 
     def create(self, validated_data):
         validated_data.pop('rePassword')
         validated_data.pop('verification_code')
-
+        verification = validated_data.pop('verification_obj')
         password = validated_data.pop('password')
 
         user = User.objects.create(**validated_data)
         user.set_password(password)
         user.phone_verified = now()
-        user.save()
+        user.save(update_fields=["password", "phone_verified", "firstname", "lastname", "email", "phone"])
 
-        VerificationCode.objects.filter(phone=user.phone).delete()
+        verification.mark_used()
+        verification.delete()
+
         return user
 
 
@@ -108,14 +116,13 @@ class UserLoginSerializer(serializers.Serializer):
 
         try:
             user = User.objects.get(Q(email=login_id) | Q(phone=login_id))
-
-            if user.check_password(password):
-                return user
-
-            raise serializers.ValidationError("არასწორი პაროლი!")
-
         except User.DoesNotExist:
             raise serializers.ValidationError("მომხმარებელი ამ მონაცემებით ვერ მოიძებნა!")
+
+        if not user.check_password(password):
+            raise serializers.ValidationError("არასწორი პაროლი!")
+
+        return user
 
 
 class PasswordResetSendCodeSerializer(serializers.Serializer):
@@ -153,17 +160,17 @@ class PasswordResetConfirmSerializer(serializers.Serializer):
             raise serializers.ValidationError({"phone": "მომხმარებელი ვერ მოიძებნა."})
 
         try:
-            v_record = VerificationCode.objects.get(phone=phone)
+            v_record = VerificationCode.objects.get(
+                phone=phone,
+                purpose=VerificationCode.PURPOSE_RESET,
+            )
         except VerificationCode.DoesNotExist:
             raise serializers.ValidationError({"verification_code": "ვერიფიკაციის კოდი არ მოიძებნა."})
 
-        if not v_record.is_valid():
+        if not v_record.expires_at or v_record.expires_at < now():
             raise serializers.ValidationError({"verification_code": "კოდს გაუვიდა ვადა."})
 
-        if v_record.code != verification_code:
-            if hasattr(v_record, "attempts_count"):
-                v_record.attempts_count += 1
-                v_record.save(update_fields=["attempts_count"])
+        if not v_record.is_valid(verification_code):
             raise serializers.ValidationError({"verification_code": "კოდი არასწორია."})
 
         attrs["user_obj"] = user
@@ -175,9 +182,11 @@ class PasswordResetConfirmSerializer(serializers.Serializer):
         verification = self.validated_data["verification_obj"]
 
         user.set_password(self.validated_data["new_password"])
-        user.save()
+        user.save(update_fields=["password"])
 
+        verification.mark_used()
         verification.delete()
+
         return user
 
 
@@ -192,7 +201,7 @@ class AvatarUploadSerializer(serializers.ModelSerializer):
         user = self.context['request'].user
         image = validated_data.get('image')
 
-        avatar, created = Avatar.objects.get_or_create(user=user)
+        avatar, _ = Avatar.objects.get_or_create(user=user)
         avatar.url = image
         avatar.save()
         return avatar
@@ -209,7 +218,7 @@ class PreferencesCreateSerializer(serializers.ModelSerializer):
         user = self.context['request'].user
         theme_color = validated_data.get('theme_color')
 
-        preferences, created = Preferences.objects.get_or_create(user=user)
+        preferences, _ = Preferences.objects.get_or_create(user=user)
         preferences.theme_color = theme_color
         preferences.save()
         return preferences
@@ -228,9 +237,28 @@ class AvatarSerializer(serializers.ModelSerializer):
 
 
 class UserProfileSerializer(serializers.ModelSerializer):
-    avatar = AvatarSerializer()
-    preferences = PreferencesSerializer()
+    avatar = serializers.SerializerMethodField()
+    preferences = serializers.SerializerMethodField()
 
     class Meta:
         model = User
-        fields = ['id', 'firstname', 'lastname', 'email', 'phone', 'phone_verified', 'avatar', 'preferences']
+        fields = [
+            'id',
+            'firstname',
+            'lastname',
+            'email',
+            'phone',
+            'phone_verified',
+            'avatar',
+            'preferences'
+        ]
+
+    def get_avatar(self, obj):
+        if hasattr(obj, "avatar") and obj.avatar:
+            return AvatarSerializer(obj.avatar).data
+        return None
+
+    def get_preferences(self, obj):
+        if hasattr(obj, "preferences") and obj.preferences:
+            return PreferencesSerializer(obj.preferences).data
+        return None

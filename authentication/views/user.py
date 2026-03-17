@@ -5,6 +5,7 @@ from rest_framework.views import APIView
 
 from django.middleware.csrf import get_token
 from django.utils.timezone import now
+from django.conf import settings
 
 from datetime import timedelta
 import uuid
@@ -22,7 +23,6 @@ from ..serializers.user import (
     PasswordResetSendCodeSerializer,
     PasswordResetConfirmSerializer,
 )
-from django.conf import settings
 from ..models import UserSession, User, VerificationCode
 from ..utils import get_client_ip
 
@@ -33,12 +33,9 @@ class AvatarView(generics.GenericAPIView):
 
     def post(self, request):
         serializer = self.get_serializer(data=request.data, context={'request': request})
-        if serializer.is_valid():
-            avatar = serializer.save()
-            avatar_data = AvatarSerializer(avatar).data
-            return Response(avatar_data, status=status.HTTP_200_OK)
-
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        serializer.is_valid(raise_exception=True)
+        avatar = serializer.save()
+        return Response(AvatarSerializer(avatar).data, status=status.HTTP_200_OK)
 
 
 class PreferencesView(generics.GenericAPIView):
@@ -47,12 +44,9 @@ class PreferencesView(generics.GenericAPIView):
 
     def post(self, request):
         serializer = self.get_serializer(data=request.data, context={'request': request})
-        if serializer.is_valid():
-            preferences = serializer.save()
-            preferences_data = PreferencesSerializer(preferences).data
-            return Response(preferences_data, status=status.HTTP_200_OK)
-
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        serializer.is_valid(raise_exception=True)
+        preferences = serializer.save()
+        return Response(PreferencesSerializer(preferences).data, status=status.HTTP_200_OK)
 
 
 class RegisterSendCodeView(APIView):
@@ -88,7 +82,10 @@ class RegisterSendCodeView(APIView):
         if User.objects.filter(phone=phone).exists():
             return Response({"detail": "ეს ნომერი უკვე დაკავებულია."}, status=400)
 
-        verification, created = VerificationCode.objects.get_or_create(phone=phone)
+        verification, _ = VerificationCode.objects.get_or_create(
+            phone=phone,
+            purpose=VerificationCode.PURPOSE_REGISTER,
+        )
 
         if not verification.can_resend():
             return Response({"detail": "დაიცადეთ 60 წამი."}, status=429)
@@ -149,7 +146,7 @@ class UserLoginView(generics.GenericAPIView):
 
         token = str(uuid.uuid4())
         user.last_login = now()
-        user.save()
+        user.save(update_fields=["last_login"])
 
         expires_at = now() + timedelta(days=2)
 
@@ -160,9 +157,7 @@ class UserLoginView(generics.GenericAPIView):
             expires_at=expires_at,
         )
 
-        user_data = UserProfileSerializer(user).data
-
-        response = Response(user_data, status=status.HTTP_200_OK)
+        response = Response(UserProfileSerializer(user).data, status=status.HTTP_200_OK)
 
         response.set_cookie(
             'session_token',
@@ -184,7 +179,6 @@ class UserLogoutView(generics.GenericAPIView):
 
     def post(self, request, *args, **kwargs):
         user = request.user
-
         sessions = UserSession.objects.filter(user=user)
 
         if not sessions.exists():
@@ -216,8 +210,7 @@ class UserProfileView(generics.RetrieveAPIView):
     serializer_class = UserProfileSerializer
 
     def get(self, request, *args, **kwargs):
-        user = request.user
-        serializer = UserProfileSerializer(user)
+        serializer = UserProfileSerializer(request.user)
         return Response(serializer.data)
 
 
@@ -229,17 +222,10 @@ class UserChangePassword(APIView):
             data=request.data,
             context={'request': request}
         )
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+        return Response({"detail": "პაროლი განახლდა წარმატებით."}, status=status.HTTP_200_OK)
 
-        if serializer.is_valid():
-            serializer.save()
-            return Response({"detail": "პაროლი განახლდა წარმატებით."}, status=status.HTTP_200_OK)
-
-        return Response({"detail": serializer.errors}, status=status.HTTP_400_BAD_REQUEST)
-
-
-# =========================
-# PASSWORD RESET (NEW)
-# =========================
 
 class PasswordResetSendCodeView(APIView):
     permission_classes = [AllowAny]
@@ -271,13 +257,15 @@ class PasswordResetSendCodeView(APIView):
 
         phone = serializer.validated_data["phone"]
 
-        verification, created = VerificationCode.objects.get_or_create(phone=phone)
+        verification, _ = VerificationCode.objects.get_or_create(
+            phone=phone,
+            purpose=VerificationCode.PURPOSE_RESET,
+        )
 
         if not verification.can_resend():
             return Response({"detail": "დაიცადეთ 60 წამი."}, status=429)
 
         verification.generate_code()
-
         sms_success = self.send_ubill_sms(phone, verification.code)
 
         if sms_success:
