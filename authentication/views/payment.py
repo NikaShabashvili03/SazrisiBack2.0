@@ -201,111 +201,54 @@ class BOGCallbackView(APIView):
     POST /api/v1/payment/bog/callback/
 
     Public endpoint — BOG calls this after every payment event.
-    Verifies the RSA-SHA256 signature then updates payment state.
+    Verifies the RSA-SHA256 signature then fulfils or rejects the payment.
     """
     permission_classes = [AllowAny]
     authentication_classes = []
 
     def post(self, request):
-        raw_body = request.body
-        signature = request.headers.get("Callback-Signature", "")
+        raw_body  = request.body
+        signature = request.headers.get('Callback-Signature', '')
 
         if not settings.DEBUG:
             if not signature or not bog_service.verify_callback_signature(raw_body, signature):
                 logger.warning("BOG callback: invalid or missing signature")
-                return Response(
-                    {"error": "Invalid signature"},
-                    status=status.HTTP_400_BAD_REQUEST,
-                )
+                return Response({'error': 'Invalid signature'}, status=status.HTTP_400_BAD_REQUEST)
 
         try:
             payload = json.loads(raw_body)
         except json.JSONDecodeError:
-            return Response(
-                {"error": "Invalid JSON"},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
+            return Response({'error': 'Invalid JSON'}, status=status.HTTP_400_BAD_REQUEST)
 
-        body = payload.get("body", {}) or {}
-        payment_detail = body.get("payment_detail", {}) or {}
-        order_status = body.get("order_status", {}).get("key", "pending")
-        response_code = payment_detail.get("response_code")
-
-        # მეორე ფაილივით ორივე ვარიანტი ვამუშავოთ
-        external_order_id = body.get("external_order_id", "")
-        bog_order_id = body.get("order_id", "")
-
-        logger.info(
-            "BOG callback received: external_order_id=%s bog_order_id=%s status=%s response_code=%s",
-            external_order_id,
-            bog_order_id,
-            order_status,
-            response_code,
+        body          = payload.get('body', {})
+        bog_order_id  = body.get('order_id', '')
+        order_status  = body.get('order_status', {}).get('key', '')
+        response_code = (
+            body.get('payment_detail', {}).get('response_code')
+            if body.get('payment_detail') else None
         )
 
-        payment = None
+        logger.info(
+            "BOG callback: order_id=%s status=%s response_code=%s",
+            bog_order_id, order_status, response_code,
+        )
 
-        # 1. ჯერ transaction_id-ით მოვძებნოთ, რადგან create_order-ში external_order_id=transaction_id გადის
-        if external_order_id:
-            payment = Payment.objects.filter(transaction_id=external_order_id).first()
+        payment = Payment.objects.filter(bog_order_id=bog_order_id).first()
+        if not payment:
+            logger.warning("BOG callback: no payment found for order_id=%s", bog_order_id)
+            return Response({'status': 'ok'})
 
-        # 2. fallback — bog order id-ით
-        if payment is None and bog_order_id:
-            payment = Payment.objects.filter(bog_order_id=bog_order_id).first()
-
-        if payment is None:
-            logger.warning(
-                "BOG callback: payment not found for external_order_id=%s / order_id=%s",
-                external_order_id,
-                bog_order_id,
-            )
-            return Response({"status": "ok"})
-
-        # თუ აქამდე არ გვქონდა შენახული bog_order_id, ჩავწეროთ
-        if bog_order_id and not payment.bog_order_id:
-            payment.bog_order_id = bog_order_id
-            payment.save(update_fields=["bog_order_id"])
-
-        # მეორე ფაილივით უფრო სრული სტატუს-მაპინგი
-        success_statuses = {"completed"}
-        failed_statuses = {
-            "rejected",
-            "failed",
-            "blocked",
-            "refunded",
-            "refunded_partially",
-            "refund_requested",
-        }
-        pending_statuses = {
-            "created",
-            "processing",
-            "auth_requested",
-            "partial_completed",
-            "pending",
-        }
-
-        if order_status in success_statuses and str(response_code) == "100":
+        if order_status == 'completed' and response_code == 100:
             if payment.status != Payment.STATUS_COMPLETED:
                 payment.mark_completed()
                 logger.info("Payment #%s marked completed", payment.id)
-
-        elif order_status in failed_statuses:
+        elif order_status in ('rejected', 'failed'):
             if payment.status != Payment.STATUS_FAILED:
                 payment.mark_failed()
                 logger.info("Payment #%s marked failed", payment.id)
 
-        elif order_status in pending_statuses:
-            logger.info("Payment #%s remains pending (status=%s)", payment.id, order_status)
+        return Response({'status': 'ok'})
 
-        else:
-            logger.info(
-                "Payment #%s received unhandled BOG status=%s response_code=%s",
-                payment.id,
-                order_status,
-                response_code,
-            )
-
-        return Response({"status": "ok"})
 
 # ── Payment status (frontend polling) ────────────────────────────────────────
 
