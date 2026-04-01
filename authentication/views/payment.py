@@ -18,7 +18,7 @@ from ..serializers import PaymentSerializer
 from ..services import bog as bog_service
 from quiz.models.quiz import Quiz
 from quiz.models.category import UserQuizAccess
-from imitation_quiz.models.imitation_quiz import ImitationQuiz, UserImitationQuizAccess
+from imitation_quiz.models.imitation_quiz import ImitationQuiz, UserImitationQuizAccess, ImitationAttempt
 
 logger = logging.getLogger(__name__)
 
@@ -95,6 +95,8 @@ class PaymentQuizPurchaseView(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
+        laptop_type = request.data.get('laptop_type', None)
+
         transaction_id = f"TXN_{uuid.uuid4().hex[:12].upper()}"
         payment = Payment.objects.create(
             user=request.user,
@@ -104,6 +106,7 @@ class PaymentQuizPurchaseView(APIView):
             description=f"წვდომა ტესტზე: {quiz.title}",
             transaction_id=transaction_id,
             status=Payment.STATUS_PENDING,
+            laptop_type=laptop_type
         )
 
         try:
@@ -292,9 +295,18 @@ class PaymentStatusView(APIView):
                 is_active=True,
             ).exists()
         
-        if payment.imitation_quiz_id:
-            pass
-
+        if payment.imitation_quiz_id and has_access:
+            quiz = get_object_or_404(ImitationQuiz, id=payment.imitation_quiz_id)
+            ImitationAttempt.objects.get_or_create(
+                user=request.user,
+                imitation_quiz=quiz,
+                laptop_type=payment.laptop_type,
+                defaults={
+                    'status': 'geted_attempt',
+                    'total_questions': quiz.get_total_questions()
+                }
+            )
+            
         return Response({
             "payment_id": payment.id,
             "transaction_id": payment.transaction_id,
