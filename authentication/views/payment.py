@@ -276,28 +276,37 @@ class PaymentStatusView(APIView):
             except Exception as exc:
                 logger.warning("Could not fetch BOG status for payment #%s: %s", payment.id, exc)
 
-        has_access = False
+        quiz_access = None
+        imitation_access = None
+
         if payment.quiz:
-            has_access = UserQuizAccess.objects.filter(
+            quiz_access = UserQuizAccess.objects.filter(
                 user=request.user,
                 quiz=payment.quiz,
                 expires_at__gt=timezone.now(),
                 is_active=True,
-            ).exists()
+            ).select_related("quiz__category").first()
+
         elif payment.imitation_quiz:
-            has_access = UserImitationQuizAccess.objects.filter(
+            imitation_access = UserImitationQuizAccess.objects.filter(
                 user=request.user,
                 imitation_quiz=payment.imitation_quiz,
                 expires_at__gt=timezone.now(),
                 is_active=True,
-            ).exists()
+            ).select_related("imitation_quiz__category").first()
 
+        has_access = bool(quiz_access or imitation_access)
+                
         return Response({
             "payment_id": payment.id,
             "transaction_id": payment.transaction_id,
             "status": payment.status,
             "amount": str(payment.amount),
             "currency": payment.currency,
+
+            "quiz_category_id": quiz_access.quiz.category.id if quiz_access else None,
+            "imitation_category_id": imitation_access.imitation_quiz.category.id if imitation_access else None,
+
             "quiz_id": payment.quiz_id,
             "imitation_quiz_id": payment.imitation_quiz_id,
             "has_access": has_access,
