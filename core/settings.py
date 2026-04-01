@@ -84,6 +84,7 @@ INSTALLED_APPS = [
     'authentication',
     'ckeditor',
     'ckeditor_uploader',
+    'ai_feedback',
 ]
 
 STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
@@ -202,7 +203,14 @@ MEDIA_URL = '/media/'
 MEDIA_ROOT = BASE_DIR / 'media'
 
 CKEDITOR_UPLOAD_PATH = "uploads/"
-UBILL_API_KEY = os.getenv("UBILL_API_KEY")
+UBILL_API_KEY  = os.getenv("UBILL_API_KEY")
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
+
+# ── Bank of Georgia (BOG) Payment Gateway ────────────────────────────────────
+BOG_CLIENT_ID  = os.getenv("BOG_CLIENT_ID", "")
+BOG_SECRET_KEY = os.getenv("BOG_SECRET_KEY", "")
+BACKEND_URL    = os.getenv("BACKEND_URL",  "https://api.sazrisi.ge")
+FRONTEND_URL   = os.getenv("FRONTEND_URL", "https://app.sazrisi.ge")
 
 CKEDITOR_CONFIGS = {
     'default': {

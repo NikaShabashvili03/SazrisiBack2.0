@@ -1,19 +1,30 @@
-from ..models import Payment
-from ..serializers import (
-    PaymentSerializer
-)
-from rest_framework import generics, status, permissions
-from rest_framework.views import APIView
-from rest_framework.response import Response
-from rest_framework.permissions import IsAuthenticated
+import uuid
+import json
+import logging
+
+from django.conf import settings
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
-from django.db import transaction
-import uuid
+from django.views.decorators.csrf import csrf_exempt
+from django.utils.decorators import method_decorator
+
+from rest_framework import generics, status
+from rest_framework.views import APIView
+from rest_framework.response import Response
+from rest_framework.permissions import IsAuthenticated, AllowAny
+
+from ..models import Payment
+from ..serializers import PaymentSerializer
+from ..services import bog as bog_service
 from quiz.models.category import Category, UserCategoryAccess
 
+logger = logging.getLogger(__name__)
+
+
+# ── Payment list / detail ─────────────────────────────────────────────────────
+
 class PaymentListView(generics.ListAPIView):
-    serializer_class = PaymentSerializer
+    serializer_class   = PaymentSerializer
     permission_classes = [IsAuthenticated]
 
     def get_queryset(self):
@@ -21,54 +32,203 @@ class PaymentListView(generics.ListAPIView):
 
 
 class PaymentDetailView(generics.RetrieveAPIView):
-    serializer_class = PaymentSerializer
+    serializer_class   = PaymentSerializer
     permission_classes = [IsAuthenticated]
 
     def get_queryset(self):
         return Payment.objects.filter(user=self.request.user)
-    
 
+
+# ── Initiate BOG payment ──────────────────────────────────────────────────────
 
 class PaymentCategoryPurchaseView(APIView):
+    """
+    POST /api/v1/payment/category/<categoryId>/pay/
+
+    Creates a BOG ecommerce order and returns the redirect URL
+    so the frontend can send the user to the BOG hosted payment page.
+    """
     permission_classes = [IsAuthenticated]
 
     def post(self, request, categoryId):
         category = get_object_or_404(Category, id=categoryId)
-        
+
         if not category.is_paid:
             return Response(
-                {'error': 'This category is free'}, 
-                status=status.HTTP_400_BAD_REQUEST
+                {'error': 'ეს კატეგორია უფასოა'},
+                status=status.HTTP_400_BAD_REQUEST,
             )
-        
+
         existing_access = UserCategoryAccess.objects.filter(
             user=request.user,
             category=category,
             expires_at__gt=timezone.now(),
-            is_active=True
+            is_active=True,
         ).exists()
-        
+
         if existing_access:
             return Response(
-                {'error': 'You already have access to this category'}, 
-                status=status.HTTP_400_BAD_REQUEST
+                {'error': 'თქვენ უკვე გაქვთ წვდომა ამ კატეგორიაზე'},
+                status=status.HTTP_400_BAD_REQUEST,
             )
-        
-        # Create payment
+
+        # Create a pending payment record first
         transaction_id = f"TXN_{uuid.uuid4().hex[:12].upper()}"
         payment = Payment.objects.create(
             user=request.user,
             category=category,
             amount=category.price,
-            description=f"Purchase access to {category.title}",
-            transaction_id=transaction_id
+            currency='GEL',
+            description=f"წვდომა კატეგორიაზე: {category.title}",
+            transaction_id=transaction_id,
+            status=Payment.STATUS_PENDING,
         )
 
-        payment.mark_completed()
-        
+        try:
+            # Build redirect URLs pointing back to the frontend
+            frontend_url = settings.FRONTEND_URL
+            bog_data = bog_service.create_order(
+                amount=float(category.price),
+                currency='GEL',
+                external_order_id=transaction_id,
+                description=f"Sazrisi – {category.title}",
+                callback_url=f"{settings.BACKEND_URL}/api/v1/payment/bog/callback/",
+                success_url=f"{frontend_url}/payment/success?order_id={transaction_id}",
+                fail_url=f"{frontend_url}/payment/fail?order_id={transaction_id}",
+            )
+
+            bog_order_id  = bog_data["id"]
+            redirect_href = bog_data["_links"]["redirect"]["href"]
+
+            # Persist the BOG order ID on the payment record
+            payment.bog_order_id = bog_order_id
+            payment.save(update_fields=["bog_order_id"])
+
+            return Response({
+                'payment_id':    payment.id,
+                'transaction_id': payment.transaction_id,
+                'bog_order_id':  bog_order_id,
+                'redirect_url':  redirect_href,
+                'amount':        str(payment.amount),
+                'currency':      payment.currency,
+            })
+
+        except Exception as exc:
+            # If BOG order creation fails, mark payment as failed and surface error
+            payment.mark_failed()
+            logger.error("BOG order creation failed: %s", exc)
+            return Response(
+                {'error': 'გადახდის სისტემასთან კავშირი ვერ დამყარდა. სცადეთ თავიდან.'},
+                status=status.HTTP_502_BAD_GATEWAY,
+            )
+
+
+# ── BOG Callback (webhook) ────────────────────────────────────────────────────
+
+@method_decorator(csrf_exempt, name='dispatch')
+class BOGCallbackView(APIView):
+    """
+    POST /api/v1/payment/bog/callback/
+
+    Public endpoint — BOG calls this after every payment event.
+    Verifies the RSA-SHA256 signature then fulfils or rejects the payment.
+    """
+    permission_classes = [AllowAny]
+    authentication_classes = []
+
+    def post(self, request):
+        raw_body  = request.body
+        signature = request.headers.get('Callback-Signature', '')
+
+        # Verify signature (skip in DEBUG if key not configured)
+        if not settings.DEBUG:
+            if not signature or not bog_service.verify_callback_signature(raw_body, signature):
+                logger.warning("BOG callback: invalid or missing signature")
+                return Response({'error': 'Invalid signature'}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            payload = json.loads(raw_body)
+        except json.JSONDecodeError:
+            return Response({'error': 'Invalid JSON'}, status=status.HTTP_400_BAD_REQUEST)
+
+        body         = payload.get('body', {})
+        bog_order_id = body.get('order_id', '')
+        order_status = body.get('order_status', {}).get('key', '')
+        response_code = (
+            body.get('payment_detail', {}).get('response_code')
+            if body.get('payment_detail') else None
+        )
+
+        logger.info(
+            "BOG callback: order_id=%s status=%s response_code=%s",
+            bog_order_id, order_status, response_code,
+        )
+
+        payment = Payment.objects.filter(bog_order_id=bog_order_id).first()
+        if not payment:
+            # BOG still expects 200 so it doesn't retry endlessly
+            logger.warning("BOG callback: no payment found for order_id=%s", bog_order_id)
+            return Response({'status': 'ok'})
+
+        if order_status == 'completed' and response_code == 100:
+            if payment.status != Payment.STATUS_COMPLETED:
+                payment.mark_completed()
+                logger.info("Payment #%s marked completed", payment.id)
+        elif order_status in ('rejected', 'failed'):
+            if payment.status != Payment.STATUS_FAILED:
+                payment.mark_failed()
+                logger.info("Payment #%s marked failed", payment.id)
+
+        return Response({'status': 'ok'})
+
+
+# ── Payment status (frontend polling) ────────────────────────────────────────
+
+class PaymentStatusView(APIView):
+    """
+    GET /api/v1/payment/status/<transaction_id>/
+
+    Frontend polls this after returning from the BOG redirect to confirm
+    whether the payment was completed.
+    """
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, transaction_id):
+        payment = get_object_or_404(
+            Payment, transaction_id=transaction_id, user=request.user
+        )
+
+        # If still pending, try to fetch live status from BOG
+        if payment.status == Payment.STATUS_PENDING and payment.bog_order_id:
+            try:
+                bog_data     = bog_service.get_order_status(payment.bog_order_id)
+                order_status = bog_data.get('order_status', {}).get('key', '')
+                response_code = (
+                    bog_data.get('payment_detail', {}).get('response_code')
+                    if bog_data.get('payment_detail') else None
+                )
+
+                if order_status == 'completed' and response_code == 100:
+                    payment.mark_completed()
+                elif order_status in ('rejected', 'failed'):
+                    payment.mark_failed()
+
+            except Exception as exc:
+                logger.warning("Could not fetch BOG status for payment #%s: %s", payment.id, exc)
+
+        has_access = UserCategoryAccess.objects.filter(
+            user=request.user,
+            category=payment.category,
+            expires_at__gt=timezone.now(),
+            is_active=True,
+        ).exists() if payment.category else False
+
         return Response({
-            'payment_id': payment.id,
+            'payment_id':    payment.id,
             'transaction_id': payment.transaction_id,
-            'amount': payment.amount,
-            'currency': payment.currency,
+            'status':        payment.status,
+            'amount':        str(payment.amount),
+            'currency':      payment.currency,
+            'category_id':   payment.category_id,
+            'has_access':    has_access,
         })

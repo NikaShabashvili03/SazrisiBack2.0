@@ -11,5 +11,6 @@ urlpatterns = [
     path('api/v1/', include("authentication.urls")),
     path('api/v2/', include("quiz.urls")),
     path('api/v3/', include("imitation_quiz.urls")),
+    path('api/v4/ai/', include("ai_feedback.urls")),
     path('ckeditor/', include('ckeditor_uploader.urls')),
 ] + static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
