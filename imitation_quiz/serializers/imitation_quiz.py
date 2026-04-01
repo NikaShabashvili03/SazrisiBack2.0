@@ -73,6 +73,7 @@ class ImitationQuizSerializer(serializers.ModelSerializer):
     total_score = serializers.SerializerMethodField()
     attempt = serializers.SerializerMethodField()
     is_active = serializers.ReadOnlyField()
+    has_access = serializers.SerializerMethodField()
 
     class Meta:
         model = ImitationQuiz
@@ -81,7 +82,8 @@ class ImitationQuizSerializer(serializers.ModelSerializer):
             'total_questions', 'total_score', 'created_at', 'attempt', 'file',
             'start_datetime', 'end_datetime', 'is_active',
             'max_space', 'user_count', 'is_valid_space',
-            'available_laptops', 'registered_laptops', 'is_laptop_available'
+            'available_laptops', 'registered_laptops', 'is_laptop_available',
+            'is_paid', 'price', 'has_access'
         ]
 
     def get_total_questions(self, obj):
@@ -89,6 +91,12 @@ class ImitationQuizSerializer(serializers.ModelSerializer):
 
     def get_total_score(self, obj):
         return obj.get_total_score()
+
+    def get_has_access(self, obj):
+        request = self.context.get('request')
+        if request and request.user.is_authenticated:
+            return obj.has_access(user=request.user)
+        return False
 
     def get_attempt(self, obj):
         request = self.context.get('request')
@@ -103,6 +111,7 @@ class CompletedImitationQuizSerializer(serializers.ModelSerializer):
     total_score = serializers.SerializerMethodField()
     attempt = serializers.SerializerMethodField()
     is_active = serializers.ReadOnlyField()
+    has_access = serializers.SerializerMethodField()
 
     class Meta:
         model = ImitationQuiz
@@ -111,7 +120,8 @@ class CompletedImitationQuizSerializer(serializers.ModelSerializer):
             'total_questions', 'total_score', 'created_at', 'attempt', 'file',
             'start_datetime', 'end_datetime', 'is_active',
             'max_space', 'user_count', 'is_valid_space',
-            'available_laptops', 'registered_laptops', 'is_laptop_available'
+            'available_laptops', 'registered_laptops', 'is_laptop_available',
+            'is_paid', 'price', 'has_access'
         ]
 
     def get_total_questions(self, obj):
@@ -120,6 +130,12 @@ class CompletedImitationQuizSerializer(serializers.ModelSerializer):
     def get_total_score(self, obj):
         return obj.get_total_score()
 
+    def get_has_access(self, obj):
+        request = self.context.get('request')
+        if request and request.user.is_authenticated:
+            return obj.has_access(user=request.user)
+        return False
+
     def get_attempt(self, obj):
         request = self.context.get('request')
         if request and request.user.is_authenticated:
@@ -127,7 +143,7 @@ class CompletedImitationQuizSerializer(serializers.ModelSerializer):
             if attempt:
                 return ImitationAttemptSerializer(attempt, context={'request': request}).data
         return None
-    
+
 # 6. შედეგების სერიალიზატორი (Result View)
 class ImitationQuizResultSerializer(serializers.ModelSerializer):
     questions = serializers.SerializerMethodField()

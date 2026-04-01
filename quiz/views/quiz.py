@@ -24,20 +24,11 @@ from django.db.models.functions import Concat
 class QuizListView(APIView):
     permission_classes = [IsAuthenticated]
 
-    def get(self, request, categoryId): 
+    def get(self, request, categoryId):
         category = get_object_or_404(Category, id=categoryId)
 
-        if not category.has_access(user=request.user):
-            print("Not Access")
-            return Response(
-                    {'error': 'You do not have access to this category'}, 
-                    status=status.HTTP_403_FORBIDDEN
-                )
-        
-        quizzes = Quiz.objects.filter(
-            category=category,
-        )
-        
+        quizzes = Quiz.objects.filter(category=category)
+
         quiz_type = request.query_params.get('type')
         if quiz_type:
             quizzes = quizzes.filter(quiz_type=quiz_type)
@@ -51,15 +42,8 @@ class QuizDetailView(APIView):
 
     def get(self, request, quiz_id, categoryId):
         category = get_object_or_404(Category, id=categoryId)
-
-        if not category.has_access(user=request.user):
-            return Response(
-                    {'error': 'You do not have access to this category'}, 
-                    status=status.HTTP_403_FORBIDDEN
-                )
-        
         quiz = get_object_or_404(Quiz, id=quiz_id, category=category)
-        
+
         serializer = QuizSerializer(quiz, context={'request': request})
         return Response(serializer.data)
 
@@ -69,14 +53,13 @@ class QuizStartView(APIView):
 
     def post(self, request, quiz_id, categoryId):
         category = get_object_or_404(Category, id=categoryId)
-
-        if not category.has_access(user=request.user):
-            return Response(
-                    {'error': 'You do not have access to this category'}, 
-                    status=status.HTTP_403_FORBIDDEN
-                )
-        
         quiz = get_object_or_404(Quiz, id=quiz_id, category=category)
+
+        if not quiz.has_access(user=request.user):
+            return Response(
+                {'error': 'ამ ტესტზე წვდომისათვის საჭიროა გადახდა', 'requires_payment': True},
+                status=status.HTTP_402_PAYMENT_REQUIRED,
+            )
         
         existing_attempt = QuizAttempt.objects.filter(
             user=request.user,

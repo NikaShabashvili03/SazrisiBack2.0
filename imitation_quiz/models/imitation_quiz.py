@@ -30,10 +30,12 @@ class ImitationQuiz(models.Model):
     title = models.CharField(max_length=255)
     description = models.TextField(blank=True, null=True)
     category = models.ForeignKey(
-        'quiz.Category', 
-        on_delete=models.CASCADE, 
+        'quiz.Category',
+        on_delete=models.CASCADE,
         related_name='imitation_quizzes'
     )
+    is_paid = models.BooleanField(default=False)
+    price = models.DecimalField(max_digits=10, decimal_places=2, default=0)
 
     time_limit = models.IntegerField(default=30)
 
@@ -104,6 +106,15 @@ class ImitationQuiz(models.Model):
     class Meta:
         ordering = ['-created_at']
     
+    def has_access(self, user):
+        if not self.is_paid:
+            return True
+        if not user or not user.is_authenticated:
+            return False
+        return UserImitationQuizAccess.objects.filter(
+            user=user, imitation_quiz=self, is_active=True, expires_at__gt=timezone.now()
+        ).exists()
+
     def get_total_questions(self):
         return self.questions.all().count()
 
@@ -261,3 +272,27 @@ class ImitationUserAnswer(models.Model):
 
     def __str__(self):
         return f"{self.attempt.user} - {self.attempt.code} ({'✓' if self.is_correct else '✗'})"
+
+
+class UserImitationQuizAccess(models.Model):
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='imitation_quiz_access')
+    imitation_quiz = models.ForeignKey(ImitationQuiz, on_delete=models.CASCADE, related_name='user_access')
+    access_granted_at = models.DateTimeField(auto_now_add=True)
+    expires_at = models.DateTimeField()
+    is_active = models.BooleanField(default=True)
+
+    class Meta:
+        ordering = ['-access_granted_at']
+
+    def __str__(self):
+        return f"{self.user} has access to {self.imitation_quiz.title} until {self.expires_at}"
+
+    @property
+    def is_access_active(self):
+        return self.is_active and timezone.now() < self.expires_at
+
+    def save(self, *args, **kwargs):
+        if not self.expires_at:
+            from datetime import timedelta
+            self.expires_at = timezone.now() + timedelta(days=30)
+        super().save(*args, **kwargs)

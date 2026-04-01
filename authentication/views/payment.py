@@ -16,7 +16,9 @@ from rest_framework.permissions import IsAuthenticated, AllowAny
 from ..models import Payment
 from ..serializers import PaymentSerializer
 from ..services import bog as bog_service
-from quiz.models.category import Category, UserCategoryAccess
+from quiz.models.quiz import Quiz
+from quiz.models.category import UserQuizAccess
+from imitation_quiz.models.imitation_quiz import ImitationQuiz, UserImitationQuizAccess
 
 logger = logging.getLogger(__name__)
 
@@ -39,88 +41,156 @@ class PaymentDetailView(generics.RetrieveAPIView):
         return Payment.objects.filter(user=self.request.user)
 
 
-# ── Initiate BOG payment ──────────────────────────────────────────────────────
+# ── Shared BOG order helper ───────────────────────────────────────────────────
 
-class PaymentCategoryPurchaseView(APIView):
+def _initiate_bog_payment(request, payment, title):
     """
-    POST /api/v1/payment/category/<categoryId>/pay/
+    Create a BOG ecommerce order for the given Payment record.
+    Returns (redirect_url, bog_order_id) on success, raises on failure.
+    """
+    frontend_url = settings.FRONTEND_URL
+    user = request.user
+    transaction_id = payment.transaction_id
 
-    Creates a BOG ecommerce order and returns the redirect URL
-    so the frontend can send the user to the BOG hosted payment page.
+    bog_data = bog_service.create_order(
+        amount=float(payment.amount),
+        currency=payment.currency,
+        external_order_id=transaction_id,
+        description=f"Sazrisi – {title}",
+        callback_url=f"{settings.BACKEND_URL}/api/v1/payment/bog/callback/",
+        success_url=f"{frontend_url}/payment/success?order_id={transaction_id}",
+        fail_url=f"{frontend_url}/payment/fail?order_id={transaction_id}",
+        buyer_full_name=f"{user.firstname} {user.lastname}".strip() or None,
+        buyer_email=getattr(user, 'email', None),
+        buyer_phone=getattr(user, 'phone', None),
+    )
+    return bog_data["id"], bog_data["_links"]["redirect"]["href"]
+
+
+# ── Initiate Quiz payment ─────────────────────────────────────────────────────
+
+class PaymentQuizPurchaseView(APIView):
+    """
+    POST /api/v1/payment/quiz/<quizId>/pay/
+
+    Creates a BOG ecommerce order for a paid quiz and returns the redirect URL.
     """
     permission_classes = [IsAuthenticated]
 
-    def post(self, request, categoryId):
-        category = get_object_or_404(Category, id=categoryId)
+    def post(self, request, quizId):
+        quiz = get_object_or_404(Quiz, id=quizId)
 
-        if not category.is_paid:
+        if not quiz.is_paid:
             return Response(
-                {'error': 'ეს კატეგორია უფასოა'},
+                {'error': 'ეს ტესტი უფასოა'},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        existing_access = UserCategoryAccess.objects.filter(
+        existing_access = UserQuizAccess.objects.filter(
             user=request.user,
-            category=category,
+            quiz=quiz,
             expires_at__gt=timezone.now(),
             is_active=True,
         ).exists()
 
         if existing_access:
             return Response(
-                {'error': 'თქვენ უკვე გაქვთ წვდომა ამ კატეგორიაზე'},
+                {'error': 'თქვენ უკვე გაქვთ წვდომა ამ ტესტზე'},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        # Create a pending payment record first
         transaction_id = f"TXN_{uuid.uuid4().hex[:12].upper()}"
         payment = Payment.objects.create(
             user=request.user,
-            category=category,
-            amount=category.price,
+            quiz=quiz,
+            amount=quiz.price,
             currency='GEL',
-            description=f"წვდომა კატეგორიაზე: {category.title}",
+            description=f"წვდომა ტესტზე: {quiz.title}",
             transaction_id=transaction_id,
             status=Payment.STATUS_PENDING,
         )
 
         try:
-            # Build redirect URLs pointing back to the frontend
-            frontend_url = settings.FRONTEND_URL
-            user = request.user
-            bog_data = bog_service.create_order(
-                amount=float(category.price),
-                currency='GEL',
-                external_order_id=transaction_id,
-                description=f"Sazrisi – {category.title}",
-                callback_url=f"{settings.BACKEND_URL}/api/v1/payment/bog/callback/",
-                success_url=f"{frontend_url}/payment/success?order_id={transaction_id}",
-                fail_url=f"{frontend_url}/payment/fail?order_id={transaction_id}",
-                buyer_full_name=f"{user.firstname} {user.lastname}".strip() or None,
-                buyer_email=getattr(user, 'email', None),
-                buyer_phone=getattr(user, 'phone', None),
-            )
-
-            bog_order_id  = bog_data["id"]
-            redirect_href = bog_data["_links"]["redirect"]["href"]
-
-            # Persist the BOG order ID on the payment record
+            bog_order_id, redirect_href = _initiate_bog_payment(request, payment, quiz.title)
             payment.bog_order_id = bog_order_id
             payment.save(update_fields=["bog_order_id"])
 
             return Response({
-                'payment_id':    payment.id,
+                'payment_id':     payment.id,
                 'transaction_id': payment.transaction_id,
-                'bog_order_id':  bog_order_id,
-                'redirect_url':  redirect_href,
-                'amount':        str(payment.amount),
-                'currency':      payment.currency,
+                'bog_order_id':   bog_order_id,
+                'redirect_url':   redirect_href,
+                'amount':         str(payment.amount),
+                'currency':       payment.currency,
             })
-
         except Exception as exc:
-            # If BOG order creation fails, mark payment as failed and surface error
             payment.mark_failed()
-            logger.error("BOG order creation failed: %s", exc)
+            logger.error("BOG order creation failed (quiz): %s", exc)
+            return Response(
+                {'error': 'გადახდის სისტემასთან კავშირი ვერ დამყარდა. სცადეთ თავიდან.'},
+                status=status.HTTP_502_BAD_GATEWAY,
+            )
+
+
+# ── Initiate ImitationQuiz payment ────────────────────────────────────────────
+
+class PaymentImitationQuizPurchaseView(APIView):
+    """
+    POST /api/v1/payment/imitation-quiz/<quizId>/pay/
+
+    Creates a BOG ecommerce order for a paid imitation quiz and returns the redirect URL.
+    """
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, quizId):
+        quiz = get_object_or_404(ImitationQuiz, id=quizId)
+
+        if not quiz.is_paid:
+            return Response(
+                {'error': 'ეს გამოცდა უფასოა'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        existing_access = UserImitationQuizAccess.objects.filter(
+            user=request.user,
+            imitation_quiz=quiz,
+            expires_at__gt=timezone.now(),
+            is_active=True,
+        ).exists()
+
+        if existing_access:
+            return Response(
+                {'error': 'თქვენ უკვე გაქვთ წვდომა ამ გამოცდაზე'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        transaction_id = f"TXN_{uuid.uuid4().hex[:12].upper()}"
+        payment = Payment.objects.create(
+            user=request.user,
+            imitation_quiz=quiz,
+            amount=quiz.price,
+            currency='GEL',
+            description=f"წვდომა გამოცდაზე: {quiz.title}",
+            transaction_id=transaction_id,
+            status=Payment.STATUS_PENDING,
+        )
+
+        try:
+            bog_order_id, redirect_href = _initiate_bog_payment(request, payment, quiz.title)
+            payment.bog_order_id = bog_order_id
+            payment.save(update_fields=["bog_order_id"])
+
+            return Response({
+                'payment_id':     payment.id,
+                'transaction_id': payment.transaction_id,
+                'bog_order_id':   bog_order_id,
+                'redirect_url':   redirect_href,
+                'amount':         str(payment.amount),
+                'currency':       payment.currency,
+            })
+        except Exception as exc:
+            payment.mark_failed()
+            logger.error("BOG order creation failed (imitation quiz): %s", exc)
             return Response(
                 {'error': 'გადახდის სისტემასთან კავშირი ვერ დამყარდა. სცადეთ თავიდან.'},
                 status=status.HTTP_502_BAD_GATEWAY,
@@ -144,7 +214,6 @@ class BOGCallbackView(APIView):
         raw_body  = request.body
         signature = request.headers.get('Callback-Signature', '')
 
-        # Verify signature (skip in DEBUG if key not configured)
         if not settings.DEBUG:
             if not signature or not bog_service.verify_callback_signature(raw_body, signature):
                 logger.warning("BOG callback: invalid or missing signature")
@@ -155,9 +224,9 @@ class BOGCallbackView(APIView):
         except json.JSONDecodeError:
             return Response({'error': 'Invalid JSON'}, status=status.HTTP_400_BAD_REQUEST)
 
-        body         = payload.get('body', {})
-        bog_order_id = body.get('order_id', '')
-        order_status = body.get('order_status', {}).get('key', '')
+        body          = payload.get('body', {})
+        bog_order_id  = body.get('order_id', '')
+        order_status  = body.get('order_status', {}).get('key', '')
         response_code = (
             body.get('payment_detail', {}).get('response_code')
             if body.get('payment_detail') else None
@@ -170,7 +239,6 @@ class BOGCallbackView(APIView):
 
         payment = Payment.objects.filter(bog_order_id=bog_order_id).first()
         if not payment:
-            # BOG still expects 200 so it doesn't retry endlessly
             logger.warning("BOG callback: no payment found for order_id=%s", bog_order_id)
             return Response({'status': 'ok'})
 
@@ -202,11 +270,10 @@ class PaymentStatusView(APIView):
             Payment, transaction_id=transaction_id, user=request.user
         )
 
-        # If still pending, try to fetch live status from BOG
         if payment.status == Payment.STATUS_PENDING and payment.bog_order_id:
             try:
-                bog_data     = bog_service.get_order_status(payment.bog_order_id)
-                order_status = bog_data.get('order_status', {}).get('key', '')
+                bog_data      = bog_service.get_order_status(payment.bog_order_id)
+                order_status  = bog_data.get('order_status', {}).get('key', '')
                 response_code = (
                     bog_data.get('payment_detail', {}).get('response_code')
                     if bog_data.get('payment_detail') else None
@@ -220,19 +287,30 @@ class PaymentStatusView(APIView):
             except Exception as exc:
                 logger.warning("Could not fetch BOG status for payment #%s: %s", payment.id, exc)
 
-        has_access = UserCategoryAccess.objects.filter(
-            user=request.user,
-            category=payment.category,
-            expires_at__gt=timezone.now(),
-            is_active=True,
-        ).exists() if payment.category else False
+        # Build access flags per payment type
+        has_access = False
+        if payment.quiz:
+            has_access = UserQuizAccess.objects.filter(
+                user=request.user,
+                quiz=payment.quiz,
+                expires_at__gt=timezone.now(),
+                is_active=True,
+            ).exists()
+        elif payment.imitation_quiz:
+            has_access = UserImitationQuizAccess.objects.filter(
+                user=request.user,
+                imitation_quiz=payment.imitation_quiz,
+                expires_at__gt=timezone.now(),
+                is_active=True,
+            ).exists()
 
         return Response({
-            'payment_id':    payment.id,
-            'transaction_id': payment.transaction_id,
-            'status':        payment.status,
-            'amount':        str(payment.amount),
-            'currency':      payment.currency,
-            'category_id':   payment.category_id,
-            'has_access':    has_access,
+            'payment_id':        payment.id,
+            'transaction_id':    payment.transaction_id,
+            'status':            payment.status,
+            'amount':            str(payment.amount),
+            'currency':          payment.currency,
+            'quiz_id':           payment.quiz_id,
+            'imitation_quiz_id': payment.imitation_quiz_id,
+            'has_access':        has_access,
         })

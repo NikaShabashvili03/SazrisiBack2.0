@@ -56,3 +56,26 @@ class UserCategoryAccess(models.Model):
         if not self.expires_at:
             self.expires_at = timezone.now() + timedelta(days=30)
         super().save(*args, **kwargs)
+
+
+class UserQuizAccess(models.Model):
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='quiz_access')
+    quiz = models.ForeignKey('quiz.Quiz', on_delete=models.CASCADE, related_name='user_access')
+    access_granted_at = models.DateTimeField(auto_now_add=True)
+    expires_at = models.DateTimeField()
+    is_active = models.BooleanField(default=True)
+
+    class Meta:
+        ordering = ['-access_granted_at']
+
+    def __str__(self):
+        return f"{self.user} has access to {self.quiz.title} until {self.expires_at}"
+
+    @property
+    def is_access_active(self):
+        return self.is_active and timezone.now() < self.expires_at
+
+    def save(self, *args, **kwargs):
+        if not self.expires_at:
+            self.expires_at = timezone.now() + timedelta(days=30)
+        super().save(*args, **kwargs)

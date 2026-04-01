@@ -76,14 +76,16 @@ class QuizSerializer(serializers.ModelSerializer):
     total_questions = serializers.SerializerMethodField()
     total_score = serializers.SerializerMethodField()
     attempt = serializers.SerializerMethodField()
-    
-    file = serializers.FileField(required=False, allow_null=True) 
+    has_access = serializers.SerializerMethodField()
+
+    file = serializers.FileField(required=False, allow_null=True)
 
     class Meta:
         model = Quiz
         fields = [
             'id', 'title', 'description', 'category',
             'time_limit', 'total_questions', 'total_score',
+            'is_paid', 'price', 'has_access',
             'created_at', 'attempt', 'file'
         ]
 
@@ -92,6 +94,12 @@ class QuizSerializer(serializers.ModelSerializer):
 
     def get_total_score(self, obj):
         return obj.get_total_score()
+
+    def get_has_access(self, obj):
+        request = self.context.get('request')
+        if request and request.user.is_authenticated:
+            return obj.has_access(user=request.user)
+        return False
 
     def get_attempt(self, obj):
         request = self.context.get('request')

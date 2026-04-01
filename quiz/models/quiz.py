@@ -1,4 +1,5 @@
 from django.db import models
+from django.utils import timezone
 from authentication.models.user import User
 from ckeditor_uploader.fields import RichTextUploadingField
 import uuid
@@ -29,6 +30,8 @@ class Quiz(models.Model):
     title = models.CharField(max_length=255)
     description = models.TextField(blank=True, null=True)
     category = models.ForeignKey('Category', on_delete=models.CASCADE, related_name='quizzes')
+    is_paid = models.BooleanField(default=False)
+    price = models.DecimalField(max_digits=10, decimal_places=2, default=0)
 
     time_limit = models.IntegerField(default=30)
 
@@ -52,6 +55,16 @@ class Quiz(models.Model):
     class Meta:
         ordering = ['-created_at']
     
+    def has_access(self, user):
+        if not self.is_paid:
+            return True
+        if not user or not user.is_authenticated:
+            return False
+        from quiz.models.category import UserQuizAccess
+        return UserQuizAccess.objects.filter(
+            user=user, quiz=self, is_active=True, expires_at__gt=timezone.now()
+        ).exists()
+
     def get_total_questions(self):
         return self.questions.all().count()
 

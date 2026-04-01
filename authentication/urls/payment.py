@@ -7,7 +7,8 @@ urlpatterns = [
     path('list/<int:pk>/', payment.PaymentDetailView.as_view(), name='payment-detail'),
 
     # Initiate BOG payment — returns redirect_url for the frontend
-    path('category/<int:categoryId>/pay/', payment.PaymentCategoryPurchaseView.as_view(), name='purchase-category'),
+    path('quiz/<int:quizId>/pay/',           payment.PaymentQuizPurchaseView.as_view(),           name='purchase-quiz'),
+    path('imitation-quiz/<int:quizId>/pay/', payment.PaymentImitationQuizPurchaseView.as_view(),  name='purchase-imitation-quiz'),
 
     # BOG webhook — called server-to-server by BOG after payment
     path('bog/callback/', payment.BOGCallbackView.as_view(), name='bog-callback'),

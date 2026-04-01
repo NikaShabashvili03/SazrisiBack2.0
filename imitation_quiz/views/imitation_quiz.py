@@ -57,14 +57,21 @@ class ImitationAccessView(APIView):
         quiz = get_object_or_404(ImitationQuiz, id=quiz_id)
         now = timezone.now()
 
+        # Payment gate
+        if not quiz.has_access(user=request.user):
+            return Response(
+                {"error": "ამ გამოცდაზე წვდომისათვის საჭიროა გადახდა", "requires_payment": True},
+                status=status.HTTP_402_PAYMENT_REQUIRED,
+            )
+
         laptop_type = request.data.get('laptop_type')
-        
+
         if laptop_type not in ['my', 'company']:
             return Response(
-                {"error": "არასწორი მოწყობილობის ტიპი. გამოიყენეთ 'my' ან 'company'"}, 
+                {"error": "არასწორი მოწყობილობის ტიპი. გამოიყენეთ 'my' ან 'company'"},
                 status=status.HTTP_400_BAD_REQUEST
             )
-            
+
         if now > quiz.start_datetime:
             return Response(
                 {"error": "დასრულებულია"}, 
