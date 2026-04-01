@@ -44,10 +44,6 @@ class PaymentDetailView(generics.RetrieveAPIView):
 # ── Shared BOG order helper ───────────────────────────────────────────────────
 
 def _initiate_bog_payment(request, payment, title):
-    """
-    Create a BOG ecommerce order for the given Payment record.
-    Returns (redirect_url, bog_order_id) on success, raises on failure.
-    """
     frontend_url = settings.FRONTEND_URL
     user = request.user
     transaction_id = payment.transaction_id

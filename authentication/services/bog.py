@@ -17,7 +17,7 @@ from django.conf import settings
 logger = logging.getLogger(__name__)
 
 # ── BOG public endpoints ──────────────────────────────────────────────────────
-AUTH_URL    = "https://api.bog.ge/auth/token"
+AUTH_URL    = "https://oauth2.bog.ge/auth/realms/bog/protocol/openid-connect/token"
 ORDERS_URL  = "https://api.bog.ge/payments/v1/ecommerce/orders"
 RECEIPT_URL = "https://api.bog.ge/payments/v1/receipt/{order_id}"
 
