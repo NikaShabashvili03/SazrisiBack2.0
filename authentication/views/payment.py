@@ -210,10 +210,10 @@ class BOGCallbackView(APIView):
         raw_body  = request.body
         signature = request.headers.get('Callback-Signature', '')
 
-        if not settings.DEBUG:
-            if not signature or not bog_service.verify_callback_signature(raw_body, signature):
-                logger.warning("BOG callback: invalid or missing signature")
-                return Response({'error': 'Invalid signature'}, status=status.HTTP_400_BAD_REQUEST)
+        # if not settings.DEBUG:
+        if not signature or not bog_service.verify_callback_signature(raw_body, signature):
+            logger.warning("BOG callback: invalid or missing signature")
+            return Response({'error': 'Invalid signature'}, status=status.HTTP_400_BAD_REQUEST)
 
         try:
             payload = json.loads(raw_body)
