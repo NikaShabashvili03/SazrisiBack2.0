@@ -7,6 +7,7 @@ import base64
 import time
 import uuid
 import logging
+from typing import Optional
 
 import requests
 from cryptography.hazmat.primitives import hashes, serialization
@@ -35,20 +36,37 @@ PwIDAQAB
 _token_cache: dict = {"token": None, "expires_at": 0}
 
 
+# ── Helpers ───────────────────────────────────────────────────────────────────
+
+def _mask_email(email: str) -> str:
+    """Returns masked email e.g. j***@example.com"""
+    if not email or "@" not in email:
+        return email
+    local, domain = email.split("@", 1)
+    return f"{local[0]}***@{domain}"
+
+
+def _mask_phone(phone: str) -> str:
+    """Returns masked phone e.g. +995***1234"""
+    if not phone or len(phone) < 4:
+        return phone
+    return f"{phone[:4]}***{phone[-4:]}"
+
+
 # ── Authentication ────────────────────────────────────────────────────────────
 
 def _get_access_token() -> str:
     """
     Fetch (or return cached) a BOG OAuth2 Bearer token.
-    Uses client_credentials flow with Basic auth.
+    Uses client_credentials grant with Basic auth (client_id:secret_key base64).
     """
     if _token_cache["token"] and time.time() < _token_cache["expires_at"] - 30:
         return _token_cache["token"]
 
-    client_id  = settings.BOG_CLIENT_ID
-    secret_key = settings.BOG_SECRET_KEY
+    credentials = base64.b64encode(
+        f"{settings.BOG_CLIENT_ID}:{settings.BOG_SECRET_KEY}".encode()
+    ).decode()
 
-    credentials = base64.b64encode(f"{client_id}:{secret_key}".encode()).decode()
     response = requests.post(
         AUTH_URL,
         headers={
@@ -69,6 +87,7 @@ def _get_access_token() -> str:
 # ── Create Order ──────────────────────────────────────────────────────────────
 
 def create_order(
+    *,
     amount: float,
     currency: str,
     external_order_id: str,
@@ -76,48 +95,73 @@ def create_order(
     callback_url: str,
     success_url: str,
     fail_url: str,
+    buyer_full_name: Optional[str] = None,
+    buyer_email: Optional[str] = None,
+    buyer_phone: Optional[str] = None,
 ) -> dict:
     """
     Create a BOG ecommerce order.
 
-    Returns the full response dict which includes:
-      - id            : BOG order UUID
-      - _links.redirect.href : URL to redirect the user to
+    Required by BOG:
+      - callback_url
+      - purchase_units.total_amount
+      - purchase_units.basket[].product_id, quantity, unit_price
+
+    Returns the response dict with:
+      - id                      : BOG order UUID (save as bog_order_id)
+      - _links.redirect.href    : redirect the user's browser here
+      - _links.details.href     : poll this for order status
     """
     token = _get_access_token()
 
-    payload = {
-        "callback_url": callback_url,
+    # ── Basket ────────────────────────────────────────────────────────────────
+    # external_order_id is used as product_id; BOG displays first 25 chars of
+    # external_order_id in the payer's bank statement.
+    basket_item: dict = {
+        "product_id":  external_order_id,
+        "quantity":    1,
+        "unit_price":  float(amount),
+        "description": description,
+        "total_price": float(amount),
+    }
+
+    # ── Buyer (optional) ─────────────────────────────────────────────────────
+    buyer: dict = {}
+    if buyer_full_name:
+        buyer["full_name"] = buyer_full_name
+    if buyer_email:
+        buyer["masked_email"] = _mask_email(buyer_email)
+    if buyer_phone:
+        buyer["masked_phone"] = _mask_phone(buyer_phone)
+
+    # ── Payload ───────────────────────────────────────────────────────────────
+    payload: dict = {
+        "callback_url":      callback_url,
         "external_order_id": external_order_id,
-        "capture": "automatic",
-        "ttl": 15,
-        "application_type": "web",
+        "capture":           "automatic",
+        "ttl":               15,
+        "application_type":  "web",
         "purchase_units": {
-            "currency": currency,
+            "currency":     currency,
             "total_amount": float(amount),
-            "basket": [
-                {
-                    "product_id": external_order_id,
-                    "quantity": 1,
-                    "unit_price": float(amount),
-                    "description": description,
-                    "total_price": float(amount),
-                }
-            ],
+            "basket":       [basket_item],
         },
         "redirect_urls": {
             "success": success_url,
-            "fail": fail_url,
+            "fail":    fail_url,
         },
-        "payment_method": ["card", "google_pay", "apple_pay"],
     }
+
+    # Only include buyer block when at least one field is present
+    if buyer:
+        payload["buyer"] = buyer
 
     response = requests.post(
         ORDERS_URL,
         json=payload,
         headers={
-            "Authorization": f"Bearer {token}",
-            "Content-Type": "application/json",
+            "Authorization":  f"Bearer {token}",
+            "Content-Type":   "application/json",
             "Accept-Language": "ka",
             "Idempotency-Key": str(uuid.uuid4()),
         },
@@ -131,7 +175,10 @@ def create_order(
 
 def get_order_status(bog_order_id: str) -> dict:
     """
-    Fetch current status of a BOG order by its order UUID.
+    GET /payments/v1/receipt/{order_id}
+
+    Fetch current status of a BOG order.
+    Useful as a fallback when the callback was missed.
     """
     token = _get_access_token()
     url   = RECEIPT_URL.format(order_id=bog_order_id)
@@ -145,18 +192,20 @@ def get_order_status(bog_order_id: str) -> dict:
     return response.json()
 
 
-# ── Signature Verification ────────────────────────────────────────────────────
+# ── Callback Signature Verification ──────────────────────────────────────────
 
 def verify_callback_signature(raw_body: bytes, signature_b64: str) -> bool:
     """
-    Verify the Callback-Signature header sent by BOG.
-    Uses RSA-SHA256 with BOG's published public key.
-    Returns True if the signature is valid, False otherwise.
+    Verify the `Callback-Signature` header BOG sends with every webhook.
+    Algorithm: RSA-SHA256 using BOG's public key.
+    Returns True only when the signature is valid.
     """
     try:
         public_key = serialization.load_pem_public_key(BOG_PUBLIC_KEY_PEM)
         signature  = base64.b64decode(signature_b64)
-        public_key.verify(signature, raw_body, padding.PKCS1v15(), hashes.SHA256())  # type: ignore[arg-type]
+        public_key.verify(  # type: ignore[arg-type]
+            signature, raw_body, padding.PKCS1v15(), hashes.SHA256()
+        )
         return True
     except Exception as exc:
         logger.warning("BOG signature verification failed: %s", exc)

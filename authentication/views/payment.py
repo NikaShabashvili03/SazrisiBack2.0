@@ -87,6 +87,7 @@ class PaymentCategoryPurchaseView(APIView):
         try:
             # Build redirect URLs pointing back to the frontend
             frontend_url = settings.FRONTEND_URL
+            user = request.user
             bog_data = bog_service.create_order(
                 amount=float(category.price),
                 currency='GEL',
@@ -95,6 +96,9 @@ class PaymentCategoryPurchaseView(APIView):
                 callback_url=f"{settings.BACKEND_URL}/api/v1/payment/bog/callback/",
                 success_url=f"{frontend_url}/payment/success?order_id={transaction_id}",
                 fail_url=f"{frontend_url}/payment/fail?order_id={transaction_id}",
+                buyer_full_name=f"{user.firstname} {user.lastname}".strip() or None,
+                buyer_email=getattr(user, 'email', None),
+                buyer_phone=getattr(user, 'phone', None),
             )
 
             bog_order_id  = bog_data["id"]

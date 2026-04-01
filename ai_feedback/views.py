@@ -1,5 +1,5 @@
 import json
-import google.generativeai as genai
+from google import genai
 
 from django.conf import settings
 from rest_framework.views import APIView
@@ -7,10 +7,11 @@ from rest_framework.response import Response
 from rest_framework import status
 from rest_framework.permissions import IsAuthenticated
 
+MODEL = "gemini-2.0-flash"
 
-def _get_model():
-    genai.configure(api_key=settings.GEMINI_API_KEY)
-    return genai.GenerativeModel('gemini-1.5-flash')
+
+def _get_client() -> genai.Client:
+    return genai.Client(api_key=settings.GEMINI_API_KEY)
 
 
 def _parse_gemini_json(text: str) -> dict:
@@ -27,8 +28,8 @@ class EvaluateEssayView(APIView):
     permission_classes = [IsAuthenticated]
 
     def post(self, request):
-        essay = request.data.get('essay', '').strip()
-        topic_title = request.data.get('topic_title', '')
+        essay        = request.data.get('essay', '').strip()
+        topic_title  = request.data.get('topic_title', '')
         topic_prompt = request.data.get('topic_prompt', '')
 
         if not essay:
@@ -63,9 +64,8 @@ class EvaluateEssayView(APIView):
 პასუხი მხოლოდ JSON, სხვა ტექსტი არ დაამატო."""
 
         try:
-            model = _get_model()
-            response = model.generate_content(prompt)
-            result = _parse_gemini_json(response.text)
+            response = _get_client().models.generate_content(model=MODEL, contents=prompt)
+            result   = _parse_gemini_json(response.text)
             return Response(result)
         except json.JSONDecodeError:
             return Response(
@@ -80,12 +80,12 @@ class EvaluateQuizView(APIView):
     permission_classes = [IsAuthenticated]
 
     def post(self, request):
-        score = request.data.get('score', 0)
+        score           = request.data.get('score', 0)
         total_questions = request.data.get('total_questions', 0)
         correct_answers = request.data.get('correct_answers', 0)
-        percentage = request.data.get('percentage', '0')
-        time_taken = request.data.get('time_taken', 0)
-        quiz_title = request.data.get('quiz_title', 'ქვიზი')
+        percentage      = request.data.get('percentage', '0')
+        time_taken      = request.data.get('time_taken', 0)
+        quiz_title      = request.data.get('quiz_title', 'ქვიზი')
 
         prompt = f"""შენ ხარ სასწავლო კონსულტანტი და მოსწავლეთა მხარდამჭერი.
 გააანალიზე მოსწავლის ქვიზის შედეგი და მიეცი პრაქტიკული, მამოტივირებელი რჩევები.
@@ -110,9 +110,8 @@ class EvaluateQuizView(APIView):
 პასუხი მხოლოდ JSON, სხვა ტექსტი არ დაამატო."""
 
         try:
-            model = _get_model()
-            response = model.generate_content(prompt)
-            result = _parse_gemini_json(response.text)
+            response = _get_client().models.generate_content(model=MODEL, contents=prompt)
+            result   = _parse_gemini_json(response.text)
             return Response(result)
         except json.JSONDecodeError:
             return Response(
