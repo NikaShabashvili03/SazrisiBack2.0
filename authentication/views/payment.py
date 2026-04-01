@@ -291,6 +291,9 @@ class PaymentStatusView(APIView):
                 expires_at__gt=timezone.now(),
                 is_active=True,
             ).exists()
+        
+        if payment.imitation_quiz_id:
+            pass
 
         return Response({
             "payment_id": payment.id,

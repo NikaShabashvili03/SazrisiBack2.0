@@ -27,6 +27,19 @@ class Payment(models.Model):
     description      = models.TextField(blank=True, null=True)
     status           = models.CharField(max_length=20, choices=STATUS_CHOICES, default=STATUS_PENDING)
     bog_order_id     = models.CharField(max_length=100, blank=True, null=True, unique=True, db_index=True)
+    
+    LAPTOP_TYPE = [
+        ('my', 'my'),
+        ('company', 'company')
+    ]
+    
+    laptop_type = models.CharField(
+        max_length=10, 
+        choices=LAPTOP_TYPE, 
+        default=None,
+        blank=True,
+        null=True
+    )
 
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
