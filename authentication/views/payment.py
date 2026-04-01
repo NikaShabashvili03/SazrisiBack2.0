@@ -197,68 +197,63 @@ class PaymentImitationQuizPurchaseView(APIView):
 
 @method_decorator(csrf_exempt, name='dispatch')
 class BOGCallbackView(APIView):
-    """
-    POST /api/v1/payment/bog/callback/
-
-    Public endpoint — BOG calls this after every payment event.
-    Verifies the RSA-SHA256 signature then fulfils or rejects the payment.
-    """
     permission_classes = [AllowAny]
     authentication_classes = []
 
     def post(self, request):
-        raw_body  = request.body
-        signature = request.headers.get('Callback-Signature', '')
+        raw_body = request.body
+        signature = request.headers.get("Callback-Signature", "")
 
         if not settings.DEBUG:
             if not signature or not bog_service.verify_callback_signature(raw_body, signature):
                 logger.warning("BOG callback: invalid or missing signature")
-                return Response({'error': 'Invalid signature'}, status=status.HTTP_400_BAD_REQUEST)
+                return Response({"error": "Invalid signature"}, status=status.HTTP_400_BAD_REQUEST)
 
         try:
-            payload = json.loads(raw_body)
-        except json.JSONDecodeError:
-            return Response({'error': 'Invalid JSON'}, status=status.HTTP_400_BAD_REQUEST)
+            payload = json.loads(raw_body.decode("utf-8"))
+        except (json.JSONDecodeError, UnicodeDecodeError):
+            logger.warning("BOG callback: invalid JSON body")
+            return Response({"error": "Invalid JSON"}, status=status.HTTP_400_BAD_REQUEST)
 
-        body          = payload.get('body', {})
-        bog_order_id  = body.get('order_id', '')
-        order_status  = body.get('order_status', {}).get('key', '')
-        response_code = (
-            body.get('payment_detail', {}).get('response_code')
-            if body.get('payment_detail') else None
-        )
+        body = payload.get("body") or {}
+        bog_order_id = body.get("order_id")
+        order_status = (body.get("order_status") or {}).get("key")
+        payment_detail = body.get("payment_detail") or {}
+        response_code = str(payment_detail.get("code")) if payment_detail.get("code") is not None else None
 
         logger.info(
-            "BOG callback: order_id=%s status=%s response_code=%s",
-            bog_order_id, order_status, response_code,
+            "BOG callback received: order_id=%s status=%s code=%s payload=%s",
+            bog_order_id,
+            order_status,
+            response_code,
+            payload,
         )
+
+        if not bog_order_id:
+            logger.warning("BOG callback: missing order_id")
+            return Response({"status": "ok"}, status=status.HTTP_200_OK)
 
         payment = Payment.objects.filter(bog_order_id=bog_order_id).first()
         if not payment:
             logger.warning("BOG callback: no payment found for order_id=%s", bog_order_id)
-            return Response({'status': 'ok'})
+            return Response({"status": "ok"}, status=status.HTTP_200_OK)
 
-        if order_status == 'completed' and response_code == 100:
+        if order_status == "completed" and response_code == "100":
             if payment.status != Payment.STATUS_COMPLETED:
                 payment.mark_completed()
                 logger.info("Payment #%s marked completed", payment.id)
-        elif order_status in ('rejected', 'failed'):
+
+        elif order_status in ("rejected", "failed"):
             if payment.status != Payment.STATUS_FAILED:
                 payment.mark_failed()
                 logger.info("Payment #%s marked failed", payment.id)
 
-        return Response({'status': 'ok'})
+        return Response({"status": "ok"}, status=status.HTTP_200_OK)
 
 
 # ── Payment status (frontend polling) ────────────────────────────────────────
 
 class PaymentStatusView(APIView):
-    """
-    GET /api/v1/payment/status/<transaction_id>/
-
-    Frontend polls this after returning from the BOG redirect to confirm
-    whether the payment was completed.
-    """
     permission_classes = [IsAuthenticated]
 
     def get(self, request, transaction_id):
@@ -268,22 +263,19 @@ class PaymentStatusView(APIView):
 
         if payment.status == Payment.STATUS_PENDING and payment.bog_order_id:
             try:
-                bog_data      = bog_service.get_order_status(payment.bog_order_id)
-                order_status  = bog_data.get('order_status', {}).get('key', '')
-                response_code = (
-                    bog_data.get('payment_detail', {}).get('response_code')
-                    if bog_data.get('payment_detail') else None
-                )
+                bog_data = bog_service.get_order_status(payment.bog_order_id)
+                order_status = (bog_data.get("order_status") or {}).get("key")
+                payment_detail = bog_data.get("payment_detail") or {}
+                response_code = str(payment_detail.get("code")) if payment_detail.get("code") is not None else None
 
-                if order_status == 'completed' and response_code == 100:
+                if order_status == "completed" and response_code == "100":
                     payment.mark_completed()
-                elif order_status in ('rejected', 'failed'):
+                elif order_status in ("rejected", "failed"):
                     payment.mark_failed()
 
             except Exception as exc:
                 logger.warning("Could not fetch BOG status for payment #%s: %s", payment.id, exc)
 
-        # Build access flags per payment type
         has_access = False
         if payment.quiz:
             has_access = UserQuizAccess.objects.filter(
@@ -301,12 +293,12 @@ class PaymentStatusView(APIView):
             ).exists()
 
         return Response({
-            'payment_id':        payment.id,
-            'transaction_id':    payment.transaction_id,
-            'status':            payment.status,
-            'amount':            str(payment.amount),
-            'currency':          payment.currency,
-            'quiz_id':           payment.quiz_id,
-            'imitation_quiz_id': payment.imitation_quiz_id,
-            'has_access':        has_access,
+            "payment_id": payment.id,
+            "transaction_id": payment.transaction_id,
+            "status": payment.status,
+            "amount": str(payment.amount),
+            "currency": payment.currency,
+            "quiz_id": payment.quiz_id,
+            "imitation_quiz_id": payment.imitation_quiz_id,
+            "has_access": has_access,
         })
