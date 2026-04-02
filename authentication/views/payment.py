@@ -297,10 +297,11 @@ class PaymentStatusView(APIView):
         
         if payment.imitation_quiz_id and has_access:
             quiz = get_object_or_404(ImitationQuiz, id=payment.imitation_quiz_id)
+            
             ImitationAttempt.objects.get_or_create(
                 user=request.user,
                 imitation_quiz=quiz,
-                laptop_type=payment.laptop_type,
+                laptop_type = payment.laptop_type if payment.laptop_type else "my",
                 defaults={
                     'status': 'geted_attempt',
                     'total_questions': quiz.get_total_questions()
