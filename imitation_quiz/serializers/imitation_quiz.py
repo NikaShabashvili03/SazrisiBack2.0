@@ -1,9 +1,22 @@
 from rest_framework import serializers
 from imitation_quiz.models.imitation_quiz import (
-    ImitationQuiz, ImitationAttempt, 
-    ImitationQuestion, ImitationUserAnswer
+    ImitationQuiz, ImitationAttempt,
+    ImitationQuestion, ImitationUserAnswer,
+    ImitationTopic, ImitationAISummary,
 )
 from authentication.serializers.user import UserProfileSerializer
+
+
+class ImitationTopicSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ImitationTopic
+        fields = ['id', 'name', 'description', 'url']
+
+
+class ImitationAISummarySerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ImitationAISummary
+        fields = ['id', 'quiz_title', 'content', 'created_at']
 
 # 1. კითხვების სერიალიზატორი
 class ImitationQuestionSerializer(serializers.ModelSerializer):
@@ -23,10 +36,12 @@ class ImitationUserAnswerSerializer(serializers.ModelSerializer):
 # 3. კითხვები თავისივე პასუხებით (შედეგების გვერდისთვის)
 class ImitationQuestionWithAnswerSerializer(serializers.ModelSerializer):
     user_answer = serializers.SerializerMethodField()
+    topic_id = serializers.SerializerMethodField()
+    topic_name = serializers.SerializerMethodField()
 
     class Meta:
         model = ImitationQuestion
-        fields = ['id', 'score', 'order', 'user_answer']
+        fields = ['id', 'score', 'order', 'user_answer', 'topic_id', 'topic_name']
 
     def get_user_answer(self, obj):
         attempt_id = self.context.get("attempt_id")
@@ -34,12 +49,18 @@ class ImitationQuestionWithAnswerSerializer(serializers.ModelSerializer):
             return None
         try:
             user_answer = ImitationUserAnswer.objects.get(
-                attempt__id=attempt_id, 
+                attempt__id=attempt_id,
                 question=obj
             )
             return ImitationUserAnswerSerializer(user_answer).data
         except ImitationUserAnswer.DoesNotExist:
             return None
+
+    def get_topic_id(self, obj):
+        return obj.topic_id if obj.topic_id else None
+
+    def get_topic_name(self, obj):
+        return obj.topic.name if obj.topic else None
 
 class ImitationAttemptSerializer(serializers.ModelSerializer):
     remaining_time = serializers.SerializerMethodField()

@@ -284,6 +284,23 @@ class ImitationUserAnswer(models.Model):
         return f"{self.attempt.user} - {self.attempt.code} ({'✓' if self.is_correct else '✗'})"
 
 
+class ImitationAISummary(models.Model):
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='ai_summaries')
+    attempt = models.ForeignKey(
+        'ImitationAttempt', on_delete=models.CASCADE,
+        related_name='ai_summaries', null=True, blank=True
+    )
+    quiz_title = models.CharField(max_length=255)
+    content = models.TextField()
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f"{self.user} — {self.quiz_title} ({self.created_at.date()})"
+
+
 class UserImitationQuizAccess(models.Model):
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='imitation_quiz_access')
     imitation_quiz = models.ForeignKey(ImitationQuiz, on_delete=models.CASCADE, related_name='user_access')
