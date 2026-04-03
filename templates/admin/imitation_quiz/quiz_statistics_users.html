@@ -1,0 +1,68 @@
+{% extends "admin/base_site.html" %}
+
+{% block breadcrumbs %}
+<div class="breadcrumbs">
+    <a href="{% url 'admin:index' %}">Home</a>
+    &rsaquo;
+    <a href="{% url 'admin:app_list' app_label=opts.app_label %}">{{ opts.app_config.verbose_name }}</a>
+    &rsaquo;
+    <a href="{% url 'admin:imitation_quiz_quizstatistics_changelist' %}">Quiz Statistics</a>
+    &rsaquo;
+    Users
+</div>
+{% endblock %}
+
+{% block content %}
+<div>
+    {% if quiz %}
+        <p>
+            <strong>Category:</strong> {{ quiz.category }}<br>
+            <strong>Time Limit:</strong> {{ quiz.time_limit }} min<br>
+            <strong>Status:</strong> {{ quiz.status }}
+        </p>
+    {% endif %}
+
+    <table id="result_list">
+        <thead>
+            <tr>
+                <th>#</th>
+                <th>User</th>
+                <th>Phone</th>
+                <th>Email</th>
+                <th>Attempt Code</th>
+                <th>Status</th>
+                <th>Score</th>
+                <th>Correct Answers</th>
+                <th>Total Questions</th>
+                <th>Percentage</th>
+                <th>Laptop Type</th>
+                <th>Started At</th>
+                <th>Completed At</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for attempt in attempts %}
+                <tr>
+                    <td>{{ forloop.counter }}</td>
+                    <td>{{ attempt.user.firstname }} {{ attempt.user.lastname }}</td>
+                    <td>{{ attempt.user.phone }}</td>
+                    <td>{{ attempt.user.email }}</td>
+                    <td>{{ attempt.code }}</td>
+                    <td>{{ attempt.status }}</td>
+                    <td>{{ attempt.score }}</td>
+                    <td>{{ attempt.correct_answers }}</td>
+                    <td>{{ attempt.total_questions }}</td>
+                    <td>{{ attempt.percentage }}%</td>
+                    <td>{{ attempt.laptop_type }}</td>
+                    <td>{{ attempt.started_at }}</td>
+                    <td>{{ attempt.completed_at|default:"-" }}</td>
+                </tr>
+            {% empty %}
+                <tr>
+                    <td colspan="13">No attempts found for this quiz.</td>
+                </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endblock %}

@@ -1,0 +1,46 @@
+{% extends "admin/base_site.html" %}
+
+{% block content %}
+<div>
+    <table id="result_list">
+        <thead>
+            <tr>
+                <th>Quiz</th>
+                <th>Category</th>
+                <th>Total Attempts</th>
+                <th>Average Score</th>
+                <th>Best Score</th>
+                <th>Created At</th>
+                <th>Users Statistics</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for quiz in quizzes %}
+                <tr>
+                    <td>{{ quiz.title }}</td>
+                    <td>{{ quiz.category }}</td>
+                    <td>{{ quiz.total_attempts_annotated|default:0 }}</td>
+                    <td>
+                        {% if quiz.avg_score_annotated %}
+                            {{ quiz.avg_score_annotated|floatformat:2 }}
+                        {% else %}
+                            0
+                        {% endif %}
+                    </td>
+                    <td>{{ quiz.best_score_annotated|default:0 }}</td>
+                    <td>{{ quiz.created_at }}</td>
+                    <td>
+                        <a href="{% url 'admin:imitation_quiz_quizstatistics_users' quiz.id %}">
+                            View Users
+                        </a>
+                    </td>
+                </tr>
+            {% empty %}
+                <tr>
+                    <td colspan="7">No quizzes found.</td>
+                </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endblock %}

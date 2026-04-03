@@ -1,4 +1,6 @@
 import json
+from typing import Any, Dict
+
 from google import genai
 
 from django.conf import settings
@@ -7,33 +9,45 @@ from rest_framework.response import Response
 from rest_framework import status
 from rest_framework.permissions import IsAuthenticated
 
-MODEL = "gemini-2.0-flash"
+MODEL = "gemini-2.5-flash"
+
+def _parse_gemini_json(text: str) -> Dict[str, Any]:
+    if not text:
+        raise json.JSONDecodeError("Empty response", "", 0)
+
+    cleaned = text.strip()
+
+    if cleaned.startswith("```"):
+        parts = cleaned.split("```")
+        if len(parts) >= 2:
+            cleaned = parts[1].strip()
+            if cleaned.lower().startswith("json"):
+                cleaned = cleaned[4:].strip()
+
+    return json.loads(cleaned)
 
 
-def _get_client() -> genai.Client:
-    return genai.Client(api_key=settings.GEMINI_API_KEY)
-
-
-def _parse_gemini_json(text: str) -> dict:
-    text = text.strip()
-    if text.startswith('```'):
-        parts = text.split('```')
-        text = parts[1] if len(parts) > 1 else text
-        if text.startswith('json'):
-            text = text[4:]
-    return json.loads(text.strip())
+def _generate_gemini_response(prompt: str):
+    with genai.Client(api_key=settings.GEMINI_API_KEY) as client:
+        return client.models.generate_content(
+            model=MODEL,
+            contents=prompt,
+        )
 
 
 class EvaluateEssayView(APIView):
-    permission_classes = [IsAuthenticated]
+    # permission_classes = [IsAuthenticated]
 
     def post(self, request):
-        essay        = request.data.get('essay', '').strip()
-        topic_title  = request.data.get('topic_title', '')
-        topic_prompt = request.data.get('topic_prompt', '')
+        essay = str(request.data.get("essay", "")).strip()
+        topic_title = str(request.data.get("topic_title", "")).strip()
+        topic_prompt = str(request.data.get("topic_prompt", "")).strip()
 
         if not essay:
-            return Response({'error': 'Essay is required'}, status=status.HTTP_400_BAD_REQUEST)
+            return Response(
+                {"error": "Essay is required"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
 
         prompt = f"""შენ ხარ ქართული ენის და ლიტერატურის გამოცდების ექსპერტი შემფასებელი.
 შეაფასე მოსწავლის ნარკვევი სახელმწიფო გამოცდის კრიტერიუმებით.
@@ -64,28 +78,39 @@ class EvaluateEssayView(APIView):
 პასუხი მხოლოდ JSON, სხვა ტექსტი არ დაამატო."""
 
         try:
-            response = _get_client().models.generate_content(model=MODEL, contents=prompt)
-            result   = _parse_gemini_json(response.text)
-            return Response(result)
+            response = _generate_gemini_response(prompt)
+
+            if not getattr(response, "text", None):
+                return Response(
+                    {"error": "AI-მ ცარიელი პასუხი დააბრუნა."},
+                    status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                )
+
+            result = _parse_gemini_json(response.text)
+            return Response(result, status=status.HTTP_200_OK)
+
         except json.JSONDecodeError:
             return Response(
-                {'error': 'AI პასუხის დამუშავება ვერ მოხერხდა. სცადეთ თავიდან.'},
+                {"error": "AI პასუხის დამუშავება ვერ მოხერხდა. სცადეთ თავიდან."},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
         except Exception as e:
-            return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            return Response(
+                {"error": str(e)},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
 
 
 class EvaluateQuizView(APIView):
-    permission_classes = [IsAuthenticated]
+    # permission_classes = [IsAuthenticated]
 
     def post(self, request):
-        score           = request.data.get('score', 0)
-        total_questions = request.data.get('total_questions', 0)
-        correct_answers = request.data.get('correct_answers', 0)
-        percentage      = request.data.get('percentage', '0')
-        time_taken      = request.data.get('time_taken', 0)
-        quiz_title      = request.data.get('quiz_title', 'ქვიზი')
+        score = request.data.get("score", 0)
+        total_questions = request.data.get("total_questions", 0)
+        correct_answers = request.data.get("correct_answers", 0)
+        percentage = request.data.get("percentage", "0")
+        time_taken = request.data.get("time_taken", 0)
+        quiz_title = str(request.data.get("quiz_title", "ქვიზი")).strip()
 
         prompt = f"""შენ ხარ სასწავლო კონსულტანტი და მოსწავლეთა მხარდამჭერი.
 გააანალიზე მოსწავლის ქვიზის შედეგი და მიეცი პრაქტიკული, მამოტივირებელი რჩევები.
@@ -110,13 +135,24 @@ class EvaluateQuizView(APIView):
 პასუხი მხოლოდ JSON, სხვა ტექსტი არ დაამატო."""
 
         try:
-            response = _get_client().models.generate_content(model=MODEL, contents=prompt)
-            result   = _parse_gemini_json(response.text)
-            return Response(result)
+            response = _generate_gemini_response(prompt)
+
+            if not getattr(response, "text", None):
+                return Response(
+                    {"error": "AI-მ ცარიელი პასუხი დააბრუნა."},
+                    status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                )
+
+            result = _parse_gemini_json(response.text)
+            return Response(result, status=status.HTTP_200_OK)
+
         except json.JSONDecodeError:
             return Response(
-                {'error': 'AI პასუხის დამუშავება ვერ მოხერხდა. სცადეთ თავიდან.'},
+                {"error": "AI პასუხის დამუშავება ვერ მოხერხდა. სცადეთ თავიდან."},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
         except Exception as e:
-            return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            return Response(
+                {"error": str(e)},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )

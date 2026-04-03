@@ -207,6 +207,14 @@ class ImitationAttempt(models.Model):
         return interacted_questions >= total_questions
 
 
+class ImitationTopic(models.Model):
+    name = models.CharField(max_length=255)
+    url = models.URLField()
+    description = models.CharField(max_length=255)
+
+    def __str__(self):
+        return self.name
+    
 class ImitationQuestion(models.Model):
     ANSWER_CHOICES = [
         ('a', 'A'),
@@ -218,6 +226,7 @@ class ImitationQuestion(models.Model):
     quiz = models.ForeignKey(ImitationQuiz, on_delete=models.CASCADE, related_name='questions')
    
     answer = models.CharField(max_length=1, choices=ANSWER_CHOICES)
+    topic = models.ForeignKey(ImitationTopic, on_delete=models.CASCADE, related_name="questions", null=True, blank=True)
     score = models.IntegerField(default=1)
     order = models.IntegerField(default=1, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
@@ -237,6 +246,7 @@ class ImitationQuestion(models.Model):
     def __str__(self):
         return f"{self.quiz.title} - Q{self.order}"
 
+    
 class ImitationUserAnswer(models.Model):
     ANSWER_CHOICES = [
         ('a', 'A'),
