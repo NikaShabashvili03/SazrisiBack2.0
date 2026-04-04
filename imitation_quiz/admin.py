@@ -33,7 +33,7 @@ from .models.quiz_statistics import QuizStatistics
 class ImitationQuestionInline(admin.StackedInline):
     model = ImitationQuestion
     extra = 1
-    fields = ["order", "answer", "score"]
+    fields = ["order", "answer", "score", "topic"]
 
 
 # -----------------------------
