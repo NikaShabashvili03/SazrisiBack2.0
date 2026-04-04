@@ -364,9 +364,24 @@ useful_links-ში მოიყვანე ძირითადად ქა�
 პასუხი მხოლოდ JSON, სხვა ტექსტი არ დაამატო."""
 
         try:
-            response = _generate_gemini_response(prompt)
-            if not getattr(response, "text", None):
-                return Response({"error": "AI-მ ცარიელი პასუხი დააბრუნა."}, status=500)
+            import time
+            max_retries = 3
+            response = None
+            last_error = None
+
+            for attempt_num in range(max_retries):
+                try:
+                    response = _generate_gemini_response(prompt)
+                    if getattr(response, "text", None):
+                        break
+                    last_error = "AI-მ ცარიელი პასუხი დააბრუნა."
+                except Exception as retry_err:
+                    last_error = str(retry_err)
+                if attempt_num < max_retries - 1:
+                    time.sleep(2 ** attempt_num)
+
+            if not response or not getattr(response, "text", None):
+                return Response({"error": last_error or "AI-მ ცარიელი პასუხი დააბრუნა."}, status=500)
 
             text = response.text.strip()
             if text.startswith("```"):
@@ -446,9 +461,24 @@ class AttemptAISummaryView(APIView):
 პასუხი დაწერე ქართულად, დეტალურად, მამოტივირებელ ტონში. გამოიყენე markdown ფორმატირება (##, **, -, და სხვ.). პასუხი უნდა იყოს მინიმუმ 400 სიტყვა."""
 
         try:
-            response = _generate_gemini_response(prompt)
-            if not getattr(response, "text", None):
-                return Response({"error": "AI-მ ცარიელი პასუხი დააბრუნა."}, status=500)
+            import time
+            max_retries = 3
+            response = None
+            last_error = None
+
+            for attempt_num in range(max_retries):
+                try:
+                    response = _generate_gemini_response(prompt)
+                    if getattr(response, "text", None):
+                        break
+                    last_error = "AI-მ ცარიელი პასუხი დააბრუნა."
+                except Exception as retry_err:
+                    last_error = str(retry_err)
+                if attempt_num < max_retries - 1:
+                    time.sleep(2 ** attempt_num)  # 1s, 2s backoff
+
+            if not response or not getattr(response, "text", None):
+                return Response({"error": last_error or "AI-მ ცარიელი პასუხი დააბრუნა."}, status=500)
 
             content = response.text.strip()
 
