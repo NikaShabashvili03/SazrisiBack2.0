@@ -224,21 +224,17 @@ class ImitationAnswerView(APIView):
             attempt.status = 'in_progress'
             attempt.save()
         
-        if attempt.is_quiz_completed():
-            attempt.status = 'completed'
-            attempt.completed_at = timezone.now()
-            
-            stats = attempt.user_answers.aggregate(
-                total_correct=models.Count('id', filter=models.Q(is_correct=True)),
-                total_earned=models.Sum('score_earned')
-            )
-            
-            attempt.correct_answers = stats['total_correct'] or 0
-            attempt.score = stats['total_earned'] or 0
-            
-            attempt.save()
-            if hasattr(attempt, 'calculate_results'):
-                attempt.calculate_results()
+        stats = attempt.user_answers.aggregate(
+            total_correct=models.Count('id', filter=models.Q(is_correct=True)),
+            total_earned=models.Sum('score_earned')
+        )
+        
+        attempt.correct_answers = stats['total_correct'] or 0
+        attempt.score = stats['total_earned'] or 0
+        
+        attempt.save()
+        if hasattr(attempt, 'calculate_results'):
+            attempt.calculate_results()
         
         return Response({
             "status": attempt.status, 
