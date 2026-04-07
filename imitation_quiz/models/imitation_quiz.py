@@ -1,30 +1,32 @@
-import random
 import os
+import random
 import uuid
+
+from django.core.exceptions import ValidationError
 from django.db import models
 from django.utils import timezone
-from django.core.exceptions import ValidationError
-from authentication.models.user import User
-from ckeditor_uploader.fields import RichTextUploadingField
-from core.utils import image_upload, validate_image
 
-# --- ფაილების ატვირთვის დამხმარე ფუნქციები ---
+from authentication.models.user import User
+
 
 def unique_file_upload_path(instance, filename):
     ext = filename.split('.')[-1]
     filename_base = os.path.splitext(filename)[0]
-    unique_id = uuid.uuid4().hex 
+    unique_id = uuid.uuid4().hex
     return f"imitation_files/{filename_base}_{unique_id}.{ext}"
+
 
 def unique_exp_upload_path(instance, filename):
     ext = filename.split('.')[-1]
     filename_base = os.path.splitext(filename)[0]
-    unique_id = uuid.uuid4().hex 
+    unique_id = uuid.uuid4().hex
     return f"imitation_explanation/{filename_base}_{unique_id}.{ext}"
+
 
 def validate_pdf(file):
     if not file.name.lower().endswith('.pdf'):
         raise ValidationError('მხოლოდ PDF ფაილებია ნებადართული.')
+
 
 class ImitationQuiz(models.Model):
     title = models.CharField(max_length=255)
@@ -34,6 +36,7 @@ class ImitationQuiz(models.Model):
         on_delete=models.CASCADE,
         related_name='imitation_quizzes'
     )
+
     is_paid = models.BooleanField(default=False)
     price = models.DecimalField(max_digits=10, decimal_places=2, default=0)
 
@@ -70,8 +73,10 @@ class ImitationQuiz(models.Model):
     )
 
     max_space = models.IntegerField(null=False, blank=False)
-
     available_laptops = models.IntegerField(null=False, blank=False)
+
+    class Meta:
+        ordering = ['-created_at']
 
     @property
     def registered_laptops(self):
@@ -80,11 +85,11 @@ class ImitationQuiz(models.Model):
     @property
     def is_laptop_available(self):
         return self.registered_laptops < self.available_laptops
-    
+
     @property
     def user_count(self):
         return self.attempts.count()
-    
+
     @property
     def is_valid_space(self):
         return self.user_count < self.max_space
@@ -93,7 +98,7 @@ class ImitationQuiz(models.Model):
     def is_active(self):
         now = timezone.now()
         return self.start_datetime <= now <= self.end_datetime
-    
+
     @property
     def status(self):
         now = timezone.now()
@@ -102,21 +107,21 @@ class ImitationQuiz(models.Model):
         elif now > self.end_datetime:
             return "Expired"
         return "Active"
-    
-    class Meta:
-        ordering = ['-created_at']
-    
+
     def has_access(self, user):
         if not self.is_paid:
             return True
         if not user or not user.is_authenticated:
             return False
         return UserImitationQuizAccess.objects.filter(
-            user=user, imitation_quiz=self, is_active=True, expires_at__gt=timezone.now()
+            user=user,
+            imitation_quiz=self,
+            is_active=True,
+            expires_at__gt=timezone.now(),
         ).exists()
 
     def get_total_questions(self):
-        return self.questions.all().count()
+        return self.questions.count()
 
     def get_total_score(self):
         return self.questions.aggregate(total=models.Sum('score'))['total'] or 0
@@ -127,21 +132,21 @@ class ImitationQuiz(models.Model):
 
 class ImitationAttempt(models.Model):
     STATUS_CHOICES = [
-        ('geted_attempt', 'Geted Attempt'), 
-        ('started', 'Started'),       
-        ('in_progress', 'In Progress'),    
+        ('geted_attempt', 'Geted Attempt'),
+        ('started', 'Started'),
+        ('in_progress', 'In Progress'),
         ('completed', 'Completed'),
         ('abandoned', 'Abandoned'),
     ]
 
     LAPTOP_TYPE = [
         ('my', 'my'),
-        ('company', 'company')
+        ('company', 'company'),
     ]
-    
+
     laptop_type = models.CharField(
-        max_length=10, 
-        choices=LAPTOP_TYPE, 
+        max_length=10,
+        choices=LAPTOP_TYPE,
         default='my'
     )
 
@@ -149,31 +154,31 @@ class ImitationAttempt(models.Model):
 
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='imitation_attempts')
     imitation_quiz = models.ForeignKey(ImitationQuiz, on_delete=models.CASCADE, related_name='attempts')
-    
+
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='started')
     score = models.IntegerField(default=0)
 
-    total_questions = models.IntegerField(default=0) 
+    total_questions = models.IntegerField(default=0)
     correct_answers = models.IntegerField(default=0)
     percentage = models.DecimalField(max_digits=5, decimal_places=2, default=0.00)
-    
+
     started_at = models.DateTimeField(auto_now_add=True)
     completed_at = models.DateTimeField(null=True, blank=True)
     time_taken = models.DurationField(null=True, blank=True)
-    
+
     class Meta:
         ordering = ['-started_at']
-    
+
     def __str__(self):
         return f"{self.user} - {self.code} ({self.get_status_display()})"
 
     def save(self, *args, **kwargs):
         if not self.code:
             self.code = self.generate_unique_code()
-        
+
         if self.status == 'completed' and not self.completed_at:
             self.completed_at = timezone.now()
-            
+
         super().save(*args, **kwargs)
 
     def generate_unique_code(self):
@@ -187,7 +192,7 @@ class ImitationAttempt(models.Model):
             total=models.Sum('time_taken')
         )['total'] or 0
 
-        quiz_time_limit_seconds = self.imitation_quiz.time_limit * 60 
+        quiz_time_limit_seconds = self.imitation_quiz.time_limit * 60
         remaining_time = quiz_time_limit_seconds - total_time_taken
         return max(0, remaining_time)
 
@@ -196,11 +201,11 @@ class ImitationAttempt(models.Model):
             self.percentage = (self.correct_answers / self.total_questions) * 100
         else:
             self.percentage = 0
-        self.save()
-    
+        self.save(update_fields=['percentage'])
+
     def get_questions(self):
         return self.imitation_quiz.questions.all()
-        
+
     def is_quiz_completed(self):
         total_questions = self.imitation_quiz.questions.count()
         interacted_questions = self.user_answers.count()
@@ -214,7 +219,8 @@ class ImitationTopic(models.Model):
 
     def __str__(self):
         return self.name
-    
+
+
 class ImitationQuestion(models.Model):
     ANSWER_CHOICES = [
         ('a', 'A'),
@@ -223,19 +229,26 @@ class ImitationQuestion(models.Model):
         ('d', 'D'),
     ]
 
-    quiz = models.ForeignKey(ImitationQuiz, on_delete=models.CASCADE, related_name='questions')
-   
+    quiz = models.ForeignKey(
+        ImitationQuiz,
+        on_delete=models.CASCADE,
+        related_name='questions'
+    )
     answer = models.CharField(max_length=1, choices=ANSWER_CHOICES)
-    topic = models.ForeignKey(ImitationTopic, on_delete=models.CASCADE, related_name="questions", null=True, blank=True)
+    topics = models.ManyToManyField(
+        ImitationTopic,
+        related_name='questions',
+        blank=True
+    )
     score = models.IntegerField(default=1)
     order = models.IntegerField(default=1, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
         ordering = ['quiz', 'order']
+        unique_together = ['quiz', 'order']
 
     def save(self, *args, **kwargs):
-        # ავტომატური ინკრემენტი 'order' ველისთვის, თუ ის არ არის მითითებული
         if not self.pk and self.order == 1:
             last_order = ImitationQuestion.objects.filter(quiz=self.quiz).aggregate(
                 max_order=models.Max('order')
@@ -246,7 +259,7 @@ class ImitationQuestion(models.Model):
     def __str__(self):
         return f"{self.quiz.title} - Q{self.order}"
 
-    
+
 class ImitationUserAnswer(models.Model):
     ANSWER_CHOICES = [
         ('a', 'A'),
@@ -257,10 +270,8 @@ class ImitationUserAnswer(models.Model):
 
     attempt = models.ForeignKey(ImitationAttempt, on_delete=models.CASCADE, related_name='user_answers')
     question = models.ForeignKey(ImitationQuestion, on_delete=models.CASCADE)
-    
-    # აქ მომხმარებელი ირჩევს კონკრეტულ ასოს
+
     selected_answer = models.CharField(max_length=1, choices=ANSWER_CHOICES)
-    
     is_correct = models.BooleanField(default=False)
     score_earned = models.IntegerField(default=0)
     answered_at = models.DateTimeField(auto_now_add=True)
@@ -271,13 +282,17 @@ class ImitationUserAnswer(models.Model):
         ordering = ['answered_at']
 
     def save(self, *args, **kwargs):
-        # ავტომატური შემოწმება სისწორეზე შენახვისას
-        if self.selected_answer == self.question.answer:
+        selected = (self.selected_answer or "").lower()
+        correct = (self.question.answer or "").lower()
+
+        if selected == correct:
             self.is_correct = True
             self.score_earned = self.question.score
         else:
             self.is_correct = False
             self.score_earned = 0
+
+        self.selected_answer = selected
         super().save(*args, **kwargs)
 
     def __str__(self):
@@ -287,8 +302,11 @@ class ImitationUserAnswer(models.Model):
 class ImitationAISummary(models.Model):
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='ai_summaries')
     attempt = models.ForeignKey(
-        'ImitationAttempt', on_delete=models.CASCADE,
-        related_name='ai_summaries', null=True, blank=True
+        'ImitationAttempt',
+        on_delete=models.CASCADE,
+        related_name='ai_summaries',
+        null=True,
+        blank=True
     )
     quiz_title = models.CharField(max_length=255)
     content = models.TextField()

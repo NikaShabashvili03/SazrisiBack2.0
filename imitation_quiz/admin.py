@@ -1,54 +1,31 @@
-from django.contrib import admin
 from django import forms
-from .models.imitation_quiz import (
-    ImitationQuiz, 
-    ImitationQuestion, 
-    ImitationAttempt, 
-    ImitationUserAnswer
-)
-
-# --- Inlines ---
-
 from django.contrib import admin
-from django import forms
-from django.urls import path, reverse
+from django.db.models import Avg, Count, Max
 from django.template.response import TemplateResponse
-from django.db.models import Count, Avg, Max
-from django.utils.html import format_html
+from django.urls import path
 
 from .models.imitation_quiz import (
-    ImitationQuiz,
-    ImitationQuestion,
     ImitationAttempt,
+    ImitationQuestion,
+    ImitationQuiz,
+    ImitationTopic,
     ImitationUserAnswer,
-    ImitationTopic
 )
-
 from .models.quiz_statistics import QuizStatistics
 
-# -----------------------------
-# Inlines
-# -----------------------------
 
 class ImitationQuestionInline(admin.StackedInline):
     model = ImitationQuestion
     extra = 1
-    fields = ["order", "answer", "score", "topic"]
+    fields = ["order", "answer", "score", "topics"]
+    filter_horizontal = ["topics"]
 
-
-# -----------------------------
-# Forms
-# -----------------------------
 
 class ImitationQuestionAdminForm(forms.ModelForm):
     class Meta:
         model = ImitationQuestion
         fields = "__all__"
 
-
-# -----------------------------
-# Default Quiz Admin
-# -----------------------------
 
 @admin.register(ImitationQuiz)
 class ImitationQuizAdmin(admin.ModelAdmin):
@@ -61,9 +38,15 @@ class ImitationQuizAdmin(admin.ModelAdmin):
 @admin.register(ImitationQuestion)
 class ImitationQuestionAdmin(admin.ModelAdmin):
     form = ImitationQuestionAdminForm
-    list_display = ["quiz", "order", "answer", "score"]
-    list_filter = ["quiz"]
+    list_display = ["quiz", "order", "answer", "score", "get_topics"]
+    list_filter = ["quiz", "topics"]
+    search_fields = ["quiz__title", "topics__name"]
     ordering = ["quiz", "order"]
+    filter_horizontal = ["topics"]
+
+    def get_topics(self, obj):
+        return ", ".join(obj.topics.values_list("name", flat=True))
+    get_topics.short_description = "Topics"
 
     class Media:
         css = {
@@ -136,10 +119,6 @@ class ImitationUserAnswerAdmin(admin.ModelAdmin):
     readonly_fields = ["answered_at"]
 
 
-# -----------------------------
-# Quiz Statistics Admin
-# -----------------------------
-
 @admin.register(QuizStatistics)
 class QuizStatisticsAdmin(admin.ModelAdmin):
     change_list_template = "admin/imitation_quiz/quiz_statistics_list.html"
@@ -196,6 +175,6 @@ class QuizStatisticsAdmin(admin.ModelAdmin):
             "admin/imitation_quiz/quiz_statistics_users.html",
             context,
         )
-    
+
 
 admin.site.register(ImitationTopic)
