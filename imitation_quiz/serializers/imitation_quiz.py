@@ -1,8 +1,12 @@
 from rest_framework import serializers
+
 from imitation_quiz.models.imitation_quiz import (
-    ImitationQuiz, ImitationAttempt,
-    ImitationQuestion, ImitationUserAnswer,
-    ImitationTopic, ImitationAISummary,
+    ImitationQuiz,
+    ImitationAttempt,
+    ImitationQuestion,
+    ImitationUserAnswer,
+    ImitationTopic,
+    ImitationAISummary,
 )
 from authentication.serializers.user import UserProfileSerializer
 
@@ -18,35 +22,41 @@ class ImitationAISummarySerializer(serializers.ModelSerializer):
         model = ImitationAISummary
         fields = ['id', 'quiz_title', 'content', 'created_at']
 
-# 1. კითხვების სერიალიზატორი
+
 class ImitationQuestionSerializer(serializers.ModelSerializer):
+    topics = ImitationTopicSerializer(many=True, read_only=True)
+
     class Meta:
         model = ImitationQuestion
-        fields = ['id', 'score', 'order']
+        fields = ['id', 'score', 'order', 'topics']
 
-# 2. მომხმარებლის პასუხების სერიალიზატორი
+
 class ImitationUserAnswerSerializer(serializers.ModelSerializer):
     class Meta:
         model = ImitationUserAnswer
         fields = [
-            'id', 'selected_answer', 'is_correct', 
-            'score_earned', 'answered_at', 'time_taken'
+            'id',
+            'selected_answer',
+            'is_correct',
+            'score_earned',
+            'answered_at',
+            'time_taken',
         ]
 
-# 3. კითხვები თავისივე პასუხებით (შედეგების გვერდისთვის)
+
 class ImitationQuestionWithAnswerSerializer(serializers.ModelSerializer):
     user_answer = serializers.SerializerMethodField()
-    topic_id = serializers.SerializerMethodField()
-    topic_name = serializers.SerializerMethodField()
+    topics = ImitationTopicSerializer(many=True, read_only=True)
 
     class Meta:
         model = ImitationQuestion
-        fields = ['id', 'score', 'order', 'user_answer', 'topic_id', 'topic_name']
+        fields = ['id', 'score', 'order', 'user_answer', 'topics']
 
     def get_user_answer(self, obj):
         attempt_id = self.context.get("attempt_id")
         if not attempt_id:
             return None
+
         try:
             user_answer = ImitationUserAnswer.objects.get(
                 attempt__id=attempt_id,
@@ -56,11 +66,6 @@ class ImitationQuestionWithAnswerSerializer(serializers.ModelSerializer):
         except ImitationUserAnswer.DoesNotExist:
             return None
 
-    def get_topic_id(self, obj):
-        return obj.topic_id if obj.topic_id else None
-
-    def get_topic_name(self, obj):
-        return obj.topic.name if obj.topic else None
 
 class ImitationAttemptSerializer(serializers.ModelSerializer):
     remaining_time = serializers.SerializerMethodField()
@@ -70,10 +75,20 @@ class ImitationAttemptSerializer(serializers.ModelSerializer):
     class Meta:
         model = ImitationAttempt
         fields = [
-            'id', 'code', 'status', 'score', 'total_questions', 
-            'correct_answers', 'percentage', 'started_at', 
-            'completed_at', 'time_taken', 'remaining_time', 'quiz_file', 'user',
-            'laptop_type'
+            'id',
+            'code',
+            'status',
+            'score',
+            'total_questions',
+            'correct_answers',
+            'percentage',
+            'started_at',
+            'completed_at',
+            'time_taken',
+            'remaining_time',
+            'quiz_file',
+            'user',
+            'laptop_type',
         ]
 
     def get_remaining_time(self, obj):
@@ -88,7 +103,7 @@ class ImitationAttemptSerializer(serializers.ModelSerializer):
             return file_url
         return None
 
-# 5. იმიტაციური ქვიზის ძირითადი სერიალიზატორი
+
 class ImitationQuizSerializer(serializers.ModelSerializer):
     total_questions = serializers.SerializerMethodField()
     total_score = serializers.SerializerMethodField()
@@ -99,12 +114,29 @@ class ImitationQuizSerializer(serializers.ModelSerializer):
     class Meta:
         model = ImitationQuiz
         fields = [
-            'id', 'title', 'description', 'category', 'time_limit', 'location',
-            'total_questions', 'total_score', 'created_at', 'attempt', 'file',
-            'start_datetime', 'end_datetime', 'is_active',
-            'max_space', 'user_count', 'is_valid_space',
-            'available_laptops', 'registered_laptops', 'is_laptop_available',
-            'is_paid', 'price', 'has_access'
+            'id',
+            'title',
+            'description',
+            'category',
+            'time_limit',
+            'location',
+            'total_questions',
+            'total_score',
+            'created_at',
+            'attempt',
+            'file',
+            'start_datetime',
+            'end_datetime',
+            'is_active',
+            'max_space',
+            'user_count',
+            'is_valid_space',
+            'available_laptops',
+            'registered_laptops',
+            'is_laptop_available',
+            'is_paid',
+            'price',
+            'has_access',
         ]
 
     def get_total_questions(self, obj):
@@ -126,6 +158,7 @@ class ImitationQuizSerializer(serializers.ModelSerializer):
             if attempt:
                 return ImitationAttemptSerializer(attempt, context={'request': request}).data
         return None
+
 
 class CompletedImitationQuizSerializer(serializers.ModelSerializer):
     total_questions = serializers.SerializerMethodField()
@@ -137,12 +170,29 @@ class CompletedImitationQuizSerializer(serializers.ModelSerializer):
     class Meta:
         model = ImitationQuiz
         fields = [
-            'id', 'title', 'description', 'category', 'time_limit', 'location',
-            'total_questions', 'total_score', 'created_at', 'attempt', 'file',
-            'start_datetime', 'end_datetime', 'is_active',
-            'max_space', 'user_count', 'is_valid_space',
-            'available_laptops', 'registered_laptops', 'is_laptop_available',
-            'is_paid', 'price', 'has_access'
+            'id',
+            'title',
+            'description',
+            'category',
+            'time_limit',
+            'location',
+            'total_questions',
+            'total_score',
+            'created_at',
+            'attempt',
+            'file',
+            'start_datetime',
+            'end_datetime',
+            'is_active',
+            'max_space',
+            'user_count',
+            'is_valid_space',
+            'available_laptops',
+            'registered_laptops',
+            'is_laptop_available',
+            'is_paid',
+            'price',
+            'has_access',
         ]
 
     def get_total_questions(self, obj):
@@ -165,7 +215,7 @@ class CompletedImitationQuizSerializer(serializers.ModelSerializer):
                 return ImitationAttemptSerializer(attempt, context={'request': request}).data
         return None
 
-# 6. შედეგების სერიალიზატორი (Result View)
+
 class ImitationQuizResultSerializer(serializers.ModelSerializer):
     questions = serializers.SerializerMethodField()
     quiz_file = serializers.SerializerMethodField()
@@ -174,15 +224,27 @@ class ImitationQuizResultSerializer(serializers.ModelSerializer):
     class Meta:
         model = ImitationAttempt
         fields = [
-            'id', 'code', 'status', 'score', 'total_questions', 'correct_answers',
-            'percentage', 'started_at', 'completed_at', 'time_taken', 'questions',
-            'quiz_file', 'quiz_explanation'
+            'id',
+            'code',
+            'status',
+            'score',
+            'total_questions',
+            'correct_answers',
+            'percentage',
+            'started_at',
+            'completed_at',
+            'time_taken',
+            'questions',
+            'quiz_file',
+            'quiz_explanation',
         ]
 
     def get_questions(self, obj):
-        questions = obj.imitation_quiz.questions.all()
+        questions = obj.imitation_quiz.questions.prefetch_related('topics').all()
         return ImitationQuestionWithAnswerSerializer(
-            questions, many=True, context={'attempt_id': obj.id}
+            questions,
+            many=True,
+            context={'attempt_id': obj.id}
         ).data
 
     def get_quiz_file(self, obj):
