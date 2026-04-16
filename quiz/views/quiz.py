@@ -16,7 +16,8 @@ from django.db.models.functions import TruncDate, TruncWeek, TruncMonth, Extract
 from collections import defaultdict
 import math
 from datetime import timedelta, datetime
-from quiz.models.quiz import UserAnswer, Quiz, Question, Topic
+from quiz.models.quiz import UserAnswer, Quiz, Question, Topic, QuizAISummary
+from quiz.serializers.quiz import QuizAISummarySerializer
 from rest_framework.parsers import MultiPartParser, FormParser
 from django.db.models import Q, Value
 from django.db.models.functions import Concat
@@ -528,3 +529,214 @@ class LeaderboardView(APIView):
 
         serializer = LeaderboardSerializer(leaderboard, many=True)
         return Response(serializer.data)
+
+
+# ─── Quiz Attempt AI Summary ──────────────────────────────────────────────────
+
+class AttemptAISummaryView(APIView):
+    """
+    POST /attempts/<attempt_id>/ai-summary/
+    Generates a 1-week AI study plan based on regular quiz results and saves it.
+    """
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, attempt_id):
+        from ai_feedback.views import _generate_gemini_response
+
+        attempt = get_object_or_404(QuizAttempt, id=attempt_id, user=request.user)
+
+        if attempt.status != 'completed':
+            return Response({"error": "ტესტი დასრულებული არ არის"}, status=400)
+
+        all_questions = attempt.quiz.questions.select_related('topic').all()
+        user_answers = {ua.question_id: ua for ua in attempt.user_answers.all()}
+
+        failed_topics = []
+        all_topics = set()
+        for q in all_questions:
+            if q.topic:
+                all_topics.add(q.topic.name)
+            ua = user_answers.get(q.id)
+            if ua and not ua.is_correct and q.topic:
+                failed_topics.append(q.topic.name)
+
+        failed_topics_unique = list(dict.fromkeys(failed_topics))
+        all_topics_str = ", ".join(all_topics) if all_topics else "უცნობი"
+        failed_str = ", ".join(failed_topics_unique) if failed_topics_unique else "არცერთი"
+        time_taken = str(attempt.time_taken) if attempt.time_taken else "უცნობი"
+
+        prompt = f"""შენ ხარ მათემატიკის პედაგოგი და სახელმწიფო გამოცდების ექსპერტი.
+მოამზადე სრული, პერსონალიზებული სასწავლო გეგმა მოსწავლისთვის, ვინც ახლახან დაასრულა ტესტი.
+
+ტესტის შედეგები:
+- სახელი: {attempt.quiz.title}
+- ქულა: {attempt.score}
+- სულ კითხვები: {attempt.total_questions}
+- სწორი პასუხები: {attempt.correct_answers}/{attempt.total_questions}
+- პროცენტი: {attempt.percentage}%
+- დახარჯული დრო: {time_taken}
+- ტესტზე წარმოდგენილი თემები: {all_topics_str}
+- შეცდომები შემდეგ თემებში: {failed_str}
+
+მოამზადე გრძელი, სტრუქტურირებული ანალიზი შემდეგი სექციებით:
+
+1. **ზოგადი შეფასება** — შეაფასე შესრულება, ქულა, დრო, ძლიერი მხარეები
+2. **სუსტი მხარეები** — დეტალურად ახსენი რომელი თემები არის გასაუმჯობესებელი და რატომ
+3. **სასწავლო გეგმა** — კვირობრივი გეგმა (1 კვირა) — კონკრეტულ თემებზე ფოკუსირება
+4. **პრიორიტეტები** — რომელ თემებს დაუთმო პირველ რიგში ყურადღება
+5. **პრაქტიკული რჩევები** — სწავლის სტრატეგია, დროის მართვა გამოცდაზე
+6. **შემდეგი ნაბიჯები** — კონკრეტული ქმედებები
+
+პასუხი დაწერე ქართულად, დეტალურად, მამოტივირებელ ტონში. გამოიყენე markdown ფორმატირება (##, **, -, და სხვ.). პასუხი უნდა იყოს მინიმუმ 400 სიტყვა."""
+
+        try:
+            import time as time_module
+            max_retries = 3
+            response = None
+            last_error = None
+
+            for attempt_num in range(max_retries):
+                try:
+                    response = _generate_gemini_response(prompt)
+                    if getattr(response, "text", None):
+                        break
+                    last_error = "AI-მ ცარიელი პასუხი დააბრუნა."
+                except Exception as retry_err:
+                    last_error = str(retry_err)
+                if attempt_num < max_retries - 1:
+                    time_module.sleep(2 ** attempt_num)
+
+            if not response or not getattr(response, "text", None):
+                return Response({"error": last_error or "AI-მ ცარიელი პასუხი დააბრუნა."}, status=500)
+
+            content = response.text.strip()
+
+            summary = QuizAISummary.objects.create(
+                user=request.user,
+                attempt=attempt,
+                quiz_title=attempt.quiz.title,
+                content=content,
+            )
+
+            return Response(
+                QuizAISummarySerializer(summary).data,
+                status=status.HTTP_201_CREATED,
+            )
+
+        except Exception as e:
+            return Response({"error": str(e)}, status=500)
+
+
+class QuizAISummaryHistoryView(APIView):
+    """
+    GET /ai-summaries/
+    Returns all AI summaries for the authenticated user (regular quizzes).
+    """
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        summaries = QuizAISummary.objects.filter(user=request.user)
+        serializer = QuizAISummarySerializer(summaries, many=True)
+        return Response(serializer.data)
+
+
+# ─── Regular Quiz Topics ──────────────────────────────────────────────────────
+
+class QuizTopicDetailView(APIView):
+    """
+    GET /topics/<topic_id>/
+    Returns topic detail for a regular quiz topic.
+    """
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, topic_id):
+        from quiz.serializers.quiz import TopicSerializer
+        topic = get_object_or_404(Topic, id=topic_id)
+        serializer = TopicSerializer(topic)
+        return Response(serializer.data)
+
+
+class QuizTopicAIInsightsView(APIView):
+    """
+    POST /topics/<topic_id>/ai-insights/
+    Generates AI insights for a regular quiz topic.
+    Access: user must have a completed attempt with a question linked to this topic.
+    """
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, topic_id):
+        from ai_feedback.views import _generate_gemini_response
+        import json
+
+        topic = get_object_or_404(Topic, id=topic_id)
+
+        has_attempt = QuizAttempt.objects.filter(
+            user=request.user,
+            status='completed',
+            quiz__questions__topic=topic,
+        ).exists()
+
+        if not has_attempt:
+            return Response(
+                {"error": "ამ თემაზე წვდომა არ გაქვს"},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        prompt = f"""შენ ხარ მათემატიკის პედაგოგი და სახელმწიფო გამოცდების ექსპერტი.
+მოამზადე სრული სასწავლო მასალა შემდეგი თემის შესახებ:
+
+თემა: {topic.name}
+
+დააბრუნე პასუხი მხოლოდ JSON ფორმატში, ქართულ ენაზე:
+{{
+  "overall_info": "თემის ზოგადი მიმოხილვა (3-4 წინადადება) — რა არის, სად გამოიყენება, რატომ მნიშვნელოვანია",
+  "detailed_info": "დეტალური ახსნა ფორმულებით, კანონებით, შინაარსობრივი განმარტებით (5-8 წინადადება)",
+  "examples": [
+    {{"task": "მაგალითი 1 — ამოცანის პირობა", "solution": "ამოხსნა ნაბიჯ-ნაბიჯ"}},
+    {{"task": "მაგალითი 2 — ამოცანის პირობა", "solution": "ამოხსნა ნაბიჯ-ნაბიჯ"}},
+    {{"task": "მაგალითი 3 — ამოცანის პირობა", "solution": "ამოხსნა ნაბიჯ-ნაბიჯ"}}
+  ],
+  "useful_links": [
+    {{"title": "რესურსის სახელი", "url": "https://..."}},
+    {{"title": "რესურსის სახელი", "url": "https://..."}}
+  ]
+}}
+
+useful_links-ში მოიყვანე ძირითადად ქართულენოვანი ან ქართული საგამოცდო სისტემისთვის შესაფერისი რესურსები (mastsavlebeli.ge, naec.ge, khan academy ქართულად და სხვ.).
+პასუხი მხოლოდ JSON, სხვა ტექსტი არ დაამატო."""
+
+        try:
+            import time as time_module
+            max_retries = 3
+            response = None
+            last_error = None
+
+            for attempt_num in range(max_retries):
+                try:
+                    response = _generate_gemini_response(prompt)
+                    if getattr(response, "text", None):
+                        break
+                    last_error = "AI-მ ცარიელი პასუხი დააბრუნა."
+                except Exception as retry_err:
+                    last_error = str(retry_err)
+                if attempt_num < max_retries - 1:
+                    time_module.sleep(2 ** attempt_num)
+
+            if not response or not getattr(response, "text", None):
+                return Response({"error": last_error or "AI-მ ცარიელი პასუხი დააბრუნა."}, status=500)
+
+            text = response.text.strip()
+            if text.startswith("```"):
+                parts = text.split("```")
+                if len(parts) >= 2:
+                    text = parts[1].strip()
+                    if text.lower().startswith("json"):
+                        text = text[4:].strip()
+
+            result = json.loads(text)
+            return Response(result, status=status.HTTP_200_OK)
+
+        except json.JSONDecodeError:
+            return Response({"error": "AI პასუხის დამუშავება ვერ მოხერხდა."}, status=500)
+        except Exception as e:
+            return Response({"error": str(e)}, status=500)

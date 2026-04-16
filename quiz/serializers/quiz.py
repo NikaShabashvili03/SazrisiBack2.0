@@ -1,11 +1,17 @@
-from quiz.models.quiz import Quiz, QuizAttempt, Question, UserAnswer, Topic, BlackNote
+from quiz.models.quiz import Quiz, QuizAttempt, Question, UserAnswer, Topic, BlackNote, QuizAISummary
 from rest_framework import serializers
 from authentication.serializers.user import UserProfileSerializer
 
 class TopicSerializer(serializers.ModelSerializer):
     class Meta:
         model = Topic
-        fields = ['name', 'url']
+        fields = ['id', 'name', 'url']
+
+
+class QuizAISummarySerializer(serializers.ModelSerializer):
+    class Meta:
+        model = QuizAISummary
+        fields = ['id', 'quiz_title', 'content', 'created_at']
 
 class QuestionSerializer(serializers.ModelSerializer):
     class Meta:

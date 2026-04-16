@@ -230,3 +230,20 @@ class UserAnswer(models.Model):
     
     def __str__(self):
         return f"{self.attempt.user} - ({'✓' if self.is_correct else '✗'})"
+
+
+class QuizAISummary(models.Model):
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='quiz_ai_summaries')
+    attempt = models.ForeignKey(
+        'QuizAttempt', on_delete=models.CASCADE,
+        related_name='ai_summaries', null=True, blank=True
+    )
+    quiz_title = models.CharField(max_length=255)
+    content = models.TextField()
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f"{self.user} — {self.quiz_title} ({self.created_at.date()})"
