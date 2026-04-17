@@ -32,6 +32,7 @@ import re
 import json
 import argparse
 import glob
+import json
 from decimal import Decimal
 
 # ── Django setup ──────────────────────────────────────────────────────────────
@@ -77,7 +78,7 @@ TOPIC_PROMPT = """\
 
 # ── PDF helpers ───────────────────────────────────────────────────────────────
 
-def read_pdf_pages(pdf_path):
+def read_solution_pages(pdf_path):
     """Return list of (page_index_1based, text) for every non-blank page."""
     pages = []
     with pdfplumber.open(pdf_path) as pdf:
@@ -86,11 +87,6 @@ def read_pdf_pages(pdf_path):
             if text and text.strip():
                 pages.append((i, text.strip()))
     return pages
-
-
-def filter_question_pages(pages):
-    """Keep only pages that contain a question block (ამოცანა keyword)."""
-    return [(n, t) for n, t in pages if 'ამოცანა' in t]
 
 
 # ── Data extraction ───────────────────────────────────────────────────────────
@@ -158,32 +154,24 @@ def create_quiz(title, category, test_pdf_path, sol_pdf_path, time_limit, dry_ru
 
 # ── Question seeding ──────────────────────────────────────────────────────────
 
-def seed_questions(quiz, test_pdf_path, sol_pdf_path, client, dry_run):
+def seed_questions(quiz, sol_pdf_path, client, dry_run):
     """
-    Read a test/solution PDF pair, extract questions, and write them to DB.
+    Read the solutions PDF and extract questions sequentially (page N = question N).
+    The test PDF is image-based and not readable as text — answers and topics
+    come from the solutions PDF only.
     Returns (new_questions, new_topics, errors).
     """
-    print(f"  Reading test PDF      : {test_pdf_path}")
-    q_pages = filter_question_pages(read_pdf_pages(test_pdf_path))
-    print(f"    → {len(q_pages)} question pages")
-
     print(f"  Reading solutions PDF : {sol_pdf_path}")
-    s_pages = read_pdf_pages(sol_pdf_path)
+    s_pages = read_solution_pages(sol_pdf_path)
     print(f"    → {len(s_pages)} solution pages")
-
-    count = min(len(q_pages), len(s_pages))
-    if len(q_pages) != len(s_pages):
-        print(f"  Warning: page counts differ ({len(q_pages)} vs {len(s_pages)}). Processing {count} pairs.")
 
     collected = []
     errors = []
 
-    for i in range(count):
-        q_page_num, q_text = q_pages[i]
-        s_page_num, s_text = s_pages[i]
+    for i, (s_page_num, s_text) in enumerate(s_pages):
         order = i + 1
 
-        print(f"    Q{order:02d} (q_page={q_page_num}, s_page={s_page_num})", end="  ")
+        print(f"    Q{order:02d} (s_page={s_page_num})", end="  ")
 
         answer = detect_answer(s_text)
         if not answer:
@@ -191,7 +179,9 @@ def seed_questions(quiz, test_pdf_path, sol_pdf_path, client, dry_run):
             errors.append((order, "answer not detected"))
             continue
 
-        score = detect_score(q_text)
+        # All questions are 1-point (ერთქულიანი) per description;
+        # still try to parse in case a solution page mentions a different score.
+        score = detect_score(s_text)
         print(f"answer={answer}  score={score}  topic...", end=" ", flush=True)
 
         try:
@@ -212,7 +202,7 @@ def seed_questions(quiz, test_pdf_path, sol_pdf_path, client, dry_run):
     print(f"  Extracted {len(collected)} questions  ({len(errors)} errors)")
 
     if dry_run:
-        print("  [DRY RUN] Would create questions:")
+        print(f"  [DRY RUN] Would create {len(collected)} questions:")
         for item in collected:
             print(f"    Q{item['order']:02d}  answer={item['answer']}  score={item['score']}  topic={item['topic_name']}")
         return 0, 0, errors
@@ -365,7 +355,6 @@ def main():
 
         new_q, new_t, errors = seed_questions(
             quiz=quiz,
-            test_pdf_path=test_path,
             sol_pdf_path=sol_path,
             client=client,
             dry_run=args.dry_run,
