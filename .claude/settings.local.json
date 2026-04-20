@@ -1,0 +1,16 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(pip show *)",
+      "Bash(python -c \"from google import genai; print\\(hasattr\\(genai.Client, '__enter__'\\), hasattr\\(genai.Client, '__exit__'\\)\\)\")",
+      "Bash(python -c ' *)",
+      "Bash(python manage.py check)",
+      "Bash(python manage.py showmigrations quiz)",
+      "Bash(python manage.py makemigrations --dry-run)",
+      "Bash(python manage.py showmigrations imitation_quiz)",
+      "Bash(python manage.py makemigrations)",
+      "Bash(python manage.py migrate)",
+      "Bash(python manage.py migrate imitation_quiz 0003 --fake)"
+    ]
+  }
+}

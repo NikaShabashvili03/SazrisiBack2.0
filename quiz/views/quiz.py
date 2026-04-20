@@ -535,15 +535,41 @@ class LeaderboardView(APIView):
 
 class AttemptAISummaryView(APIView):
     """
-    POST /attempts/<attempt_id>/ai-summary/
-    Generates a 1-week AI study plan based on regular quiz results and saves it.
+    GET  /attempts/<attempt_id>/ai-summary/  — returns the latest AI summary for this attempt.
+    POST /attempts/<attempt_id>/ai-summary/  — generates and stores a new AI study plan.
     """
     permission_classes = [IsAuthenticated]
 
-    def post(self, request, attempt_id):
-        from ai_feedback.views import _generate_gemini_response
+    def _get_attempt(self, request, attempt_id):
+        try:
+            return QuizAttempt.objects.get(id=attempt_id, user=request.user), None
+        except QuizAttempt.DoesNotExist:
+            return None, Response(
+                {"error": "მცდელობა ვერ მოიძებნა"},
+                status=status.HTTP_404_NOT_FOUND,
+            )
 
-        attempt = get_object_or_404(QuizAttempt, id=attempt_id, user=request.user)
+    def get(self, request, attempt_id):
+        attempt, err = self._get_attempt(request, attempt_id)
+        if err is not None:
+            return err
+
+        summary = (
+            QuizAISummary.objects.filter(user=request.user, attempt=attempt)
+            .order_by('-created_at')
+            .first()
+        )
+        if summary is None:
+            return Response({"summary": None}, status=status.HTTP_200_OK)
+
+        return Response(QuizAISummarySerializer(summary).data, status=status.HTTP_200_OK)
+
+    def post(self, request, attempt_id):
+        from ai_feedback.views import _generate_with_retry
+
+        attempt, err = self._get_attempt(request, attempt_id)
+        if err is not None:
+            return err
 
         if attempt.status != 'completed':
             return Response({"error": "ტესტი დასრულებული არ არის"}, status=400)
@@ -590,24 +616,13 @@ class AttemptAISummaryView(APIView):
 პასუხი დაწერე ქართულად, დეტალურად, მამოტივირებელ ტონში. გამოიყენე markdown ფორმატირება (##, **, -, და სხვ.). პასუხი უნდა იყოს მინიმუმ 400 სიტყვა."""
 
         try:
-            import time as time_module
-            max_retries = 3
-            response = None
-            last_error = None
+            response, last_error = _generate_with_retry(prompt)
 
-            for attempt_num in range(max_retries):
-                try:
-                    response = _generate_gemini_response(prompt)
-                    if getattr(response, "text", None):
-                        break
-                    last_error = "AI-მ ცარიელი პასუხი დააბრუნა."
-                except Exception as retry_err:
-                    last_error = str(retry_err)
-                if attempt_num < max_retries - 1:
-                    time_module.sleep(2 ** attempt_num)
-
-            if not response or not getattr(response, "text", None):
-                return Response({"error": last_error or "AI-მ ცარიელი პასუხი დააბრუნა."}, status=500)
+            if response is None or not getattr(response, "text", None):
+                return Response(
+                    {"error": last_error or "AI-მ ცარიელი პასუხი დააბრუნა."},
+                    status=status.HTTP_503_SERVICE_UNAVAILABLE,
+                )
 
             content = response.text.strip()
 
@@ -665,7 +680,7 @@ class QuizTopicAIInsightsView(APIView):
     permission_classes = [IsAuthenticated]
 
     def post(self, request, topic_id):
-        from ai_feedback.views import _generate_gemini_response
+        from ai_feedback.views import _generate_with_retry, _parse_gemini_json
         import json
 
         topic = get_object_or_404(Topic, id=topic_id)
@@ -706,37 +721,21 @@ useful_links-ში მოიყვანე ძირითადად ქა�
 პასუხი მხოლოდ JSON, სხვა ტექსტი არ დაამატო."""
 
         try:
-            import time as time_module
-            max_retries = 3
-            response = None
-            last_error = None
+            response, last_error = _generate_with_retry(prompt, json_mode=True)
 
-            for attempt_num in range(max_retries):
-                try:
-                    response = _generate_gemini_response(prompt)
-                    if getattr(response, "text", None):
-                        break
-                    last_error = "AI-მ ცარიელი პასუხი დააბრუნა."
-                except Exception as retry_err:
-                    last_error = str(retry_err)
-                if attempt_num < max_retries - 1:
-                    time_module.sleep(2 ** attempt_num)
+            if response is None or not getattr(response, "text", None):
+                return Response(
+                    {"error": last_error or "AI-მ ცარიელი პასუხი დააბრუნა."},
+                    status=status.HTTP_503_SERVICE_UNAVAILABLE,
+                )
 
-            if not response or not getattr(response, "text", None):
-                return Response({"error": last_error or "AI-მ ცარიელი პასუხი დააბრუნა."}, status=500)
-
-            text = response.text.strip()
-            if text.startswith("```"):
-                parts = text.split("```")
-                if len(parts) >= 2:
-                    text = parts[1].strip()
-                    if text.lower().startswith("json"):
-                        text = text[4:].strip()
-
-            result = json.loads(text)
+            result = _parse_gemini_json(response.text)
             return Response(result, status=status.HTTP_200_OK)
 
         except json.JSONDecodeError:
-            return Response({"error": "AI პასუხის დამუშავება ვერ მოხერხდა."}, status=500)
+            return Response(
+                {"error": "AI პასუხის დამუშავება ვერ მოხერხდა."},
+                status=status.HTTP_502_BAD_GATEWAY,
+            )
         except Exception as e:
             return Response({"error": str(e)}, status=500)

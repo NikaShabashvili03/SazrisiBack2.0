@@ -1,4 +1,6 @@
 import json
+import re
+import time as time_module
 from typing import Any, Dict
 
 from google import genai
@@ -10,6 +12,9 @@ from rest_framework import status
 from rest_framework.permissions import IsAuthenticated
 
 MODEL = "gemini-2.5-flash"
+FALLBACK_MODELS = ["gemini-2.5-flash-lite", "gemini-2.0-flash", "gemini-1.5-flash"]
+MAX_RETRIES = 2
+
 
 def _parse_gemini_json(text: str) -> Dict[str, Any]:
     if not text:
@@ -23,16 +28,50 @@ def _parse_gemini_json(text: str) -> Dict[str, Any]:
             cleaned = parts[1].strip()
             if cleaned.lower().startswith("json"):
                 cleaned = cleaned[4:].strip()
+            if cleaned.endswith("```"):
+                cleaned = cleaned[:-3].strip()
 
-    return json.loads(cleaned)
+    try:
+        return json.loads(cleaned)
+    except json.JSONDecodeError:
+        match = re.search(r"\{.*\}", cleaned, re.DOTALL)
+        if match:
+            return json.loads(match.group(0))
+        raise
 
 
-def _generate_gemini_response(prompt: str):
+def _call_gemini(prompt: str, model: str, json_mode: bool = False):
     with genai.Client(api_key=settings.GEMINI_API_KEY) as client:
-        return client.models.generate_content(
-            model=MODEL,
-            contents=prompt,
-        )
+        kwargs: Dict[str, Any] = {
+            "model": model,
+            "contents": prompt,
+        }
+        if json_mode:
+            kwargs["config"] = {"response_mime_type": "application/json"}
+        return client.models.generate_content(**kwargs)
+
+
+def _generate_gemini_response(prompt: str, json_mode: bool = False):
+    return _call_gemini(prompt, MODEL, json_mode=json_mode)
+
+
+def _generate_with_retry(prompt: str, json_mode: bool = False, max_retries: int = MAX_RETRIES):
+    last_error = None
+    models_to_try = [MODEL, *FALLBACK_MODELS]
+
+    for model in models_to_try:
+        for attempt_num in range(max_retries):
+            try:
+                response = _call_gemini(prompt, model, json_mode=json_mode)
+                if getattr(response, "text", None):
+                    return response, None
+                last_error = "AI-მ ცარიელი პასუხი დააბრუნა."
+            except Exception as err:
+                last_error = f"{model}: {err}"
+            if attempt_num < max_retries - 1:
+                time_module.sleep(2 ** attempt_num)
+
+    return None, last_error or "AI-მ ცარიელი პასუხი დააბრუნა."
 
 
 class EvaluateEssayView(APIView):
@@ -78,12 +117,11 @@ class EvaluateEssayView(APIView):
 პასუხი მხოლოდ JSON, სხვა ტექსტი არ დაამატო."""
 
         try:
-            response = _generate_gemini_response(prompt)
-
-            if not getattr(response, "text", None):
+            response, err = _generate_with_retry(prompt, json_mode=True)
+            if response is None:
                 return Response(
-                    {"error": "AI-მ ცარიელი პასუხი დააბრუნა."},
-                    status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    {"error": err},
+                    status=status.HTTP_503_SERVICE_UNAVAILABLE,
                 )
 
             result = _parse_gemini_json(response.text)
@@ -92,12 +130,12 @@ class EvaluateEssayView(APIView):
         except json.JSONDecodeError:
             return Response(
                 {"error": "AI პასუხის დამუშავება ვერ მოხერხდა. სცადეთ თავიდან."},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                status=status.HTTP_502_BAD_GATEWAY,
             )
         except Exception as e:
             return Response(
                 {"error": str(e)},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                status=status.HTTP_502_BAD_GATEWAY,
             )
 
 
@@ -135,12 +173,11 @@ class EvaluateQuizView(APIView):
 პასუხი მხოლოდ JSON, სხვა ტექსტი არ დაამატო."""
 
         try:
-            response = _generate_gemini_response(prompt)
-
-            if not getattr(response, "text", None):
+            response, err = _generate_with_retry(prompt, json_mode=True)
+            if response is None:
                 return Response(
-                    {"error": "AI-მ ცარიელი პასუხი დააბრუნა."},
-                    status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    {"error": err},
+                    status=status.HTTP_503_SERVICE_UNAVAILABLE,
                 )
 
             result = _parse_gemini_json(response.text)
@@ -149,10 +186,10 @@ class EvaluateQuizView(APIView):
         except json.JSONDecodeError:
             return Response(
                 {"error": "AI პასუხის დამუშავება ვერ მოხერხდა. სცადეთ თავიდან."},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                status=status.HTTP_502_BAD_GATEWAY,
             )
         except Exception as e:
             return Response(
                 {"error": str(e)},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                status=status.HTTP_502_BAD_GATEWAY,
             )
